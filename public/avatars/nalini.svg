@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <!-- Nalini: Resume Strategist (Purple / Violet) -->
+  <circle cx="60" cy="60" r="58" fill="#0f172a" stroke="#a855f7" stroke-width="4"/>
+  <circle cx="60" cy="46" r="22" fill="#9333ea"/>
+  <circle cx="53" cy="43" r="3.5" fill="#ffffff"/>
+  <circle cx="67" cy="43" r="3.5" fill="#ffffff"/>
+  <path d="M54 53 Q60 58 66 53" stroke="#f3e8ff" stroke-width="2" stroke-linecap="round"/>
+  <path d="M26 100 C26 78 40 70 60 70 C80 70 94 78 94 100 Z" fill="#7e22ce"/>
+  <rect x="52" y="76" width="16" height="12" rx="2" fill="#e9d5ff"/>
+</svg>
+

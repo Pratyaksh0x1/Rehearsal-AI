@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" width="100%" height="100%">
+  <!-- Rehearsal AI: Curly braces with audio wave / rehearsal curtain core -->
+  <path d="M28 20 C28 32, 22 36, 16 38 C22 40, 28 44, 28 56 L28 80 C28 84, 24 88, 20 88 M28 20 C28 16, 24 12, 20 12" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" class="text-accent" />
+  <path d="M72 20 C72 32, 78 36, 84 38 C78 40, 72 44, 72 56 L72 80 C72 84, 76 88, 80 88 M72 20 C72 16, 76 12, 80 12" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" class="text-accent" />
+  <!-- Center audio sound waves representing interview voice rehearsal -->
+  <line x1="38" y1="50" x2="38" y2="50" stroke="#06b6d4" stroke-width="6" stroke-linecap="round" />
+  <line x1="44" y1="42" x2="44" y2="58" stroke="#06b6d4" stroke-width="6" stroke-linecap="round" />
+  <line x1="50" y1="32" x2="50" y2="68" stroke="#3b82f6" stroke-width="6" stroke-linecap="round" />
+  <line x1="56" y1="42" x2="56" y2="58" stroke="#06b6d4" stroke-width="6" stroke-linecap="round" />
+  <line x1="62" y1="50" x2="62" y2="50" stroke="#06b6d4" stroke-width="6" stroke-linecap="round" />
+</svg>
+
