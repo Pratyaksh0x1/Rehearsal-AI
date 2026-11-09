@@ -82,16 +82,16 @@ export default function InterviewHubPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0a0818] text-text-primary flex flex-col transition-colors selection:bg-purple-500/30">
+    <div className="min-h-screen bg-bg dark:bg-[#0a0818] text-text-primary flex flex-col transition-colors selection:bg-purple-500/30">
       <Navbar />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
         {/* Step Indicator Header matching screenshot */}
         <div className="mb-8 flex items-baseline">
-          <span className="font-serif italic text-purple-300 text-xl sm:text-2xl font-normal mr-3">
+          <span className="font-serif italic text-purple-600 dark:text-purple-300 text-xl sm:text-2xl font-normal mr-3">
             1
           </span>
-          <h1 className="text-sm sm:text-base font-medium text-white/90 tracking-wide">
+          <h1 className="text-sm sm:text-base font-medium text-text-primary dark:text-white/90 tracking-wide">
             Choose your round
           </h1>
         </div>
@@ -106,15 +106,15 @@ export default function InterviewHubPage() {
                 key={track.id}
                 href={track.href}
                 onClick={() => captureEvent('interview_track_selected', { track: track.id })}
-                className={`rounded-3xl p-6 sm:p-7 flex flex-col justify-between shadow-2xl relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:-translate-y-1.5 group cursor-pointer ${
+                className={`rounded-3xl p-6 sm:p-7 flex flex-col justify-between shadow-xl relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:-translate-y-1.5 group cursor-pointer ${
                   track.isActive
-                    ? 'bg-[#141226]/95 border border-purple-500/50 shadow-[0_0_35px_rgba(168,85,247,0.18)] hover:border-purple-400'
-                    : 'bg-[#141226]/85 border border-white/10 hover:border-purple-500/40 hover:bg-[#18152e]'
+                    ? 'bg-surface border-2 border-purple-500 shadow-xl dark:bg-[#141226]/95 dark:border-purple-500/50 dark:shadow-[0_0_35px_rgba(168,85,247,0.18)] hover:border-purple-600'
+                    : 'bg-surface border border-border hover:border-purple-400 hover:shadow-lg dark:bg-[#141226]/85 dark:border-white/10 dark:hover:border-purple-500/40 dark:hover:bg-[#18152e]'
                 }`}
               >
                 {/* Ambient purple glow for active card */}
                 {track.isActive && (
-                  <div className="absolute -right-12 -top-12 w-44 h-44 rounded-full bg-purple-600/15 blur-2xl pointer-events-none" />
+                  <div className="absolute -right-12 -top-12 w-44 h-44 rounded-full bg-purple-500/10 dark:bg-purple-600/15 blur-2xl pointer-events-none" />
                 )}
 
                 <div>
@@ -122,12 +122,12 @@ export default function InterviewHubPage() {
                   <div className="flex items-start justify-between gap-3 mb-5">
                     <div className="flex items-center gap-3.5">
                       {/* Squircle Icon Container */}
-                      <div className="w-12 h-12 rounded-2xl bg-purple-950/60 border border-purple-500/30 flex items-center justify-center flex-shrink-0 text-purple-300 shadow-inner group-hover:scale-105 transition-transform">
-                        <Icon className="w-5 h-5 text-purple-300" />
+                      <div className="w-12 h-12 rounded-2xl bg-purple-100 border border-purple-300 flex items-center justify-center flex-shrink-0 text-purple-700 shadow-sm dark:bg-purple-950/60 dark:border-purple-500/30 dark:text-purple-300 group-hover:scale-105 transition-transform">
+                        <Icon className="w-5 h-5 text-purple-700 dark:text-purple-300" />
                       </div>
 
                       <div>
-                        <h2 className="font-serif text-2xl sm:text-3xl font-bold text-white tracking-tight group-hover:text-purple-200 transition-colors">
+                        <h2 className="font-serif text-2xl sm:text-3xl font-bold text-text-primary dark:text-white tracking-tight group-hover:text-purple-600 dark:group-hover:text-purple-200 transition-colors">
                           {track.title}
                         </h2>
                         <p className="text-xs text-text-muted mt-0.5 font-normal">
@@ -137,7 +137,7 @@ export default function InterviewHubPage() {
                     </div>
 
                     {/* Circular Arrow Button */}
-                    <div className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/70 group-hover:bg-purple-500/25 group-hover:border-purple-500/40 group-hover:text-white transition-all shadow-sm flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 group-hover:bg-purple-600 group-hover:border-purple-600 group-hover:text-white dark:bg-white/5 dark:border-white/10 dark:text-white/70 dark:group-hover:bg-purple-500/25 dark:group-hover:border-purple-500/40 dark:group-hover:text-white transition-all shadow-sm flex-shrink-0">
                       <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                     </div>
                   </div>
@@ -152,7 +152,7 @@ export default function InterviewHubPage() {
                     Judged on{' '}
                     {track.criteria.map((c, i) =>
                       c.bold ? (
-                        <span key={i} className="font-bold text-white">
+                        <span key={i} className="font-bold text-text-primary dark:text-white">
                           {c.label}
                         </span>
                       ) : (
@@ -162,27 +162,25 @@ export default function InterviewHubPage() {
                   </p>
                 </div>
 
-                {/* Bottom Interviewer Avatars Section */}
-                <div className="pt-4 border-t border-white/5">
-                  {track.interviewerLabel && (
-                    <span className="text-[11px] font-mono text-text-subtle font-medium block mb-3">
-                      {track.interviewerLabel}
-                    </span>
-                  )}
+                {/* Bottom Row: Interviewer Portraits */}
+                <div className="pt-4 border-t border-border dark:border-white/10 mt-auto">
+                  <span className="text-xs font-medium text-text-muted mb-3 block">
+                    {track.interviewerLabel}
+                  </span>
 
-                  <div className="flex items-center gap-4">
-                    {track.interviewers.map((iv, idx) => (
-                      <div key={idx} className="flex flex-col items-center gap-1.5 group/iv">
-                        <div className="relative w-11 h-11 rounded-full overflow-hidden ring-2 ring-purple-500/30 group-hover/iv:ring-purple-400 transition-all shadow-md">
+                  <div className="flex items-center gap-3">
+                    {track.interviewers.map((person, idx) => (
+                      <div key={idx} className="flex flex-col items-center gap-1.5 group/person">
+                        <div className="relative w-11 h-11 rounded-full overflow-hidden ring-2 ring-purple-500/30 group-hover/person:ring-purple-500 transition-all shadow-sm">
                           <Image
-                            src={iv.avatarUrl}
-                            alt={iv.name}
+                            src={person.avatarUrl}
+                            alt={person.name}
                             fill
-                            className="object-cover group-hover/iv:scale-105 transition-transform"
+                            className="object-cover group-hover/person:scale-105 transition-transform"
                           />
                         </div>
-                        <span className="text-[11px] font-medium text-text-muted group-hover/iv:text-white transition-colors">
-                          {iv.name}
+                        <span className="text-[11px] font-mono font-medium text-text-primary dark:text-white/90">
+                          {person.name}
                         </span>
                       </div>
                     ))}

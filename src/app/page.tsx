@@ -65,7 +65,7 @@ function LandingPageContent() {
     <div className="min-h-screen bg-bg text-text-primary flex flex-col transition-colors selection:bg-accent/30">
       {/* 1. Cylindrical Glassmorphism Header */}
       <header className="sticky top-3.5 z-50 w-full px-4 sm:px-6 pointer-events-none">
-        <div className="pointer-events-auto max-w-5xl mx-auto h-13 rounded-full backdrop-blur-2xl bg-surface/80 dark:bg-[#0b0f19]/80 border border-white/20 dark:border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.35)] px-4 sm:px-6 flex items-center justify-between transition-all">
+        <div className="pointer-events-auto max-w-5xl mx-auto h-13 rounded-full backdrop-blur-2xl bg-surface/90 dark:bg-[#0b0f19]/80 border border-border dark:border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.35)] px-4 sm:px-6 flex items-center justify-between transition-all">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group flex-shrink-0">
             <div className="relative w-7 h-7 flex-shrink-0">
@@ -90,15 +90,15 @@ function LandingPageContent() {
             <span className="flex items-center gap-1.5 hover:text-text-primary transition-colors">
               <Code className="w-3.5 h-3.5 text-accent" /> Technical
             </span>
-            <span className="text-white/20">&bull;</span>
+            <span className="text-text-subtle/50">&bull;</span>
             <span className="flex items-center gap-1.5 hover:text-text-primary transition-colors">
               <Mic className="w-3.5 h-3.5 text-purple-400" /> Behavioral HR
             </span>
-            <span className="text-white/20">&bull;</span>
+            <span className="text-text-subtle/50">&bull;</span>
             <span className="flex items-center gap-1.5 hover:text-text-primary transition-colors">
               <FileText className="w-3.5 h-3.5 text-emerald-400" /> Resume Review
             </span>
-            <span className="text-white/20">&bull;</span>
+            <span className="text-text-subtle/50">&bull;</span>
             <span className="flex items-center gap-1.5 hover:text-text-primary transition-colors">
               <Trophy className="w-3.5 h-3.5 text-amber-400" /> Dual Leagues
             </span>

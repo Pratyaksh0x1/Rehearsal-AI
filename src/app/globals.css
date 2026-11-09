@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+[data-theme='dark'],
+.dark {
   /* Default to Dark Theme Tokens (LeetCode / TUF aesthetic) */
   --color-bg: #0b0f19;
   --color-bg-subtle: #111726;
@@ -40,7 +42,8 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, monospace;
 }
 
-[data-theme='light'] {
+[data-theme='light'],
+.light {
   --color-bg: #f8fafc;
   --color-bg-subtle: #f1f5f9;
   --color-surface: #ffffff;
@@ -177,6 +180,20 @@ code, pre, .font-mono {
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='light'] .glass-pill,
+.light .glass-pill {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.03);
+}
+
+[data-theme='light'] .glass-card-luxury,
+.light .glass-card-luxury {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 

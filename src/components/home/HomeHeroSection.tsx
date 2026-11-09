@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Mic, Sparkles, ArrowRight } from 'lucide-react';
+import { Mic, ArrowRight } from 'lucide-react';
 import { captureEvent } from '@/lib/analytics/posthog';
 
 interface HomeHeroSectionProps {
@@ -41,9 +41,9 @@ export function HomeHeroSection({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         {/* Left Column: Headline, Voice Orb Waveform, CTA */}
         <div className="lg:col-span-7 space-y-6">
-          <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-serif font-black tracking-tight text-white leading-[1.14]">
+          <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-serif font-black tracking-tight text-text-primary dark:text-white leading-[1.14]">
             The moment you enter the environment,{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-fuchsia-200 to-white">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-fuchsia-600 to-indigo-600 dark:from-purple-300 dark:via-fuchsia-200 dark:to-white">
               your interviewer is ready.
             </span>
           </h1>
@@ -66,7 +66,7 @@ export function HomeHeroSection({
               ].map((height, i) => (
                 <span
                   key={i}
-                  className="w-1 rounded-full bg-gradient-to-t from-purple-500/70 via-fuchsia-300 to-white transition-all duration-300"
+                  className="w-1 rounded-full bg-gradient-to-t from-purple-600 via-fuchsia-500 to-indigo-500 dark:from-purple-500/70 dark:via-fuchsia-300 dark:to-white transition-all duration-300"
                   style={{
                     height: `${height * 0.45}px`,
                     animation: `pulse-glow 2.2s ease-in-out infinite`,
@@ -94,7 +94,7 @@ export function HomeHeroSection({
             </Link>
 
             <div className="flex flex-col text-left">
-              <span className="text-xs font-bold text-white tracking-wide">
+              <span className="text-xs font-bold text-text-primary dark:text-white tracking-wide">
                 Your free interview
               </span>
               <span className="text-xs text-text-muted">Technical, any format</span>
@@ -105,15 +105,15 @@ export function HomeHeroSection({
         {/* Right Column: 10,000+ Pill & "Your rank" Card */}
         <div className="lg:col-span-5 flex flex-col items-start lg:items-end space-y-3">
           {/* Top Pill Counter */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md text-xs text-purple-200 font-mono shadow-md">
-            <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-surface border border-border dark:bg-white/5 dark:border-white/10 backdrop-blur-md text-xs text-purple-700 dark:text-purple-200 font-mono shadow-sm">
+            <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
             <span>10,000+ students practised</span>
           </div>
 
           {/* Your Rank Luxury Card */}
-          <div className="w-full max-w-md bg-[#161426]/90 border border-white/10 rounded-3xl p-6 sm:p-7 shadow-2xl relative overflow-hidden backdrop-blur-2xl">
+          <div className="w-full max-w-md bg-surface border border-border dark:bg-[#161426]/90 dark:border-white/10 rounded-3xl p-6 sm:p-7 shadow-xl dark:shadow-2xl relative overflow-hidden backdrop-blur-2xl transition-all">
             {/* Ambient Purple Background Glow */}
-            <div className="absolute -right-16 -top-16 w-52 h-52 rounded-full bg-purple-600/20 blur-3xl pointer-events-none" />
+            <div className="absolute -right-16 -top-16 w-52 h-52 rounded-full bg-purple-500/10 dark:bg-purple-600/20 blur-3xl pointer-events-none" />
 
             {/* Top row: 3D Rank Shield + Info */}
             <div className="flex items-center gap-4 mb-6">
@@ -131,7 +131,7 @@ export function HomeHeroSection({
                 <span className="text-[11px] font-mono uppercase tracking-wider text-text-subtle font-bold block">
                   Your rank
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-serif font-black tracking-wider text-white">
+                <h2 className="text-2xl sm:text-3xl font-serif font-black tracking-wider text-text-primary dark:text-white">
                   {rankDisplay}
                 </h2>
                 <p className="text-xs text-text-muted leading-relaxed line-clamp-2">
@@ -141,9 +141,9 @@ export function HomeHeroSection({
             </div>
 
             {/* Points & Progress Bar */}
-            <div className="space-y-2 pt-2 border-t border-white/10">
+            <div className="space-y-2 pt-2 border-t border-border dark:border-white/10">
               <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-white/90 font-medium">
+                <span className="text-text-primary dark:text-white/90 font-medium">
                   {pointsRemaining} points to {nextRank}
                 </span>
                 <span className="text-text-subtle font-bold">
@@ -153,9 +153,9 @@ export function HomeHeroSection({
 
               {/* Progress Bar Track with Next Rank Icon */}
               <div className="relative flex items-center">
-                <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden">
+                <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-2.5 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-purple-500 via-fuchsia-400 to-indigo-300 rounded-full transition-all duration-500 shadow-[0_0_12px_rgba(192,132,252,0.8)]"
+                    className="h-full bg-gradient-to-r from-purple-500 via-fuchsia-400 to-indigo-400 rounded-full transition-all duration-500 shadow-[0_0_12px_rgba(192,132,252,0.8)]"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
@@ -175,7 +175,7 @@ export function HomeHeroSection({
             <div className="pt-4 mt-1">
               <Link
                 href="/leaderboard"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-300 hover:text-white transition-colors group"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:text-purple-800 dark:text-purple-300 dark:hover:text-white transition-colors group"
               >
                 <span>See all five ranks</span>
                 <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
@@ -187,4 +187,3 @@ export function HomeHeroSection({
     </section>
   );
 }
-

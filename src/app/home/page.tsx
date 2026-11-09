@@ -40,7 +40,7 @@ export default function HomePage() {
   const userPoints = profileData?.user?.points ?? user?.points ?? 100;
 
   return (
-    <div className="min-h-screen bg-[#0a0818] text-text-primary flex flex-col transition-colors selection:bg-purple-500/30">
+    <div className="min-h-screen bg-bg dark:bg-[#0a0818] text-text-primary flex flex-col transition-colors selection:bg-purple-500/30">
       <Navbar />
 
       <main className="flex-1 space-y-2">

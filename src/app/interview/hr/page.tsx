@@ -229,7 +229,6 @@ export default function HRRoundPage() {
       if (data.evaluation) {
         setEvaluation(data.evaluation);
         setShowModal(true);
-        resetInterviewTimer('hr');
         captureEvent('hr_evaluation_completed', {
           communicationScore: data.evaluation.communicationScore,
           starStructureScore: data.evaluation.starStructureScore,

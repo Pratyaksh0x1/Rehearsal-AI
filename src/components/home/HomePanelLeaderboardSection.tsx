@@ -101,11 +101,11 @@ export function HomePanelLeaderboardSection({
         {/* ================================================================= */}
         {/* LEFT CARD: Meet your panel                                        */}
         {/* ================================================================= */}
-        <div className="bg-[#131124]/90 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden backdrop-blur-2xl transition-all">
+        <div className="bg-surface border border-border dark:bg-[#131124]/90 dark:border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-xl dark:shadow-2xl relative overflow-hidden backdrop-blur-2xl transition-all">
           <div>
             {/* Header */}
             <div className="space-y-2 mb-6">
-              <h2 className="text-3xl sm:text-4xl font-serif font-bold text-white tracking-tight">
+              <h2 className="text-3xl sm:text-4xl font-serif font-bold text-text-primary dark:text-white tracking-tight">
                 Meet your panel
               </h2>
               <p className="text-sm text-text-muted leading-relaxed font-normal">
@@ -119,7 +119,7 @@ export function HomePanelLeaderboardSection({
               {panelists.map((panelist, idx) => (
                 <div
                   key={idx}
-                  className="rounded-2xl bg-[#1d1b32]/85 border border-white/5 hover:border-purple-500/30 p-3.5 sm:p-4 transition-all duration-200 flex items-center gap-3.5 sm:gap-4 group hover:bg-[#23203c]"
+                  className="rounded-2xl bg-bg-subtle border border-border hover:border-purple-400 dark:bg-[#1d1b32]/85 dark:border-white/5 dark:hover:border-purple-500/30 p-3.5 sm:p-4 transition-all duration-200 flex items-center gap-3.5 sm:gap-4 group hover:bg-surface-hover dark:hover:bg-[#23203c]"
                 >
                   {/* Circular Avatar */}
                   <div className="relative w-12 h-12 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-purple-500/30 shadow-md">
@@ -134,14 +134,14 @@ export function HomePanelLeaderboardSection({
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className="font-bold text-sm sm:text-base text-white">
+                      <span className="font-bold text-sm sm:text-base text-text-primary dark:text-white">
                         {panelist.name}
                       </span>
                       <span
                         className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${
                           panelist.tagType === 'warmup'
-                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                            : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                            : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
                         }`}
                       >
                         {panelist.tag}
@@ -157,11 +157,11 @@ export function HomePanelLeaderboardSection({
           </div>
 
           {/* Bottom Action Link */}
-          <div className="pt-6 border-t border-white/5 mt-4">
+          <div className="pt-6 border-t border-border dark:border-white/5 mt-4">
             <Link
               href="/interview"
               onClick={() => captureEvent('panel_start_interview_clicked')}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-white/95 hover:text-purple-300 transition-colors group"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-text-primary hover:text-purple-600 dark:text-white/95 dark:hover:text-purple-300 transition-colors group"
             >
               <span>Start your first interview</span>
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
@@ -172,11 +172,11 @@ export function HomePanelLeaderboardSection({
         {/* ================================================================= */}
         {/* RIGHT CARD: Leaderboard                                           */}
         {/* ================================================================= */}
-        <div className="bg-[#131124]/90 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden backdrop-blur-2xl transition-all">
+        <div className="bg-surface border border-border dark:bg-[#131124]/90 dark:border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-xl dark:shadow-2xl relative overflow-hidden backdrop-blur-2xl transition-all">
           <div>
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl sm:text-4xl font-serif font-bold text-white tracking-tight">
+              <h2 className="text-3xl sm:text-4xl font-serif font-bold text-text-primary dark:text-white tracking-tight">
                 Leaderboard
               </h2>
               <span className="text-xs font-mono text-text-subtle font-semibold uppercase tracking-wider">
@@ -189,7 +189,7 @@ export function HomePanelLeaderboardSection({
               {topFive.map((user) => (
                 <div
                   key={user.rank}
-                  className="flex items-center justify-between py-1.5 px-2 hover:bg-white/[0.02] rounded-xl transition-colors"
+                  className="flex items-center justify-between py-1.5 px-2 hover:bg-slate-100 dark:hover:bg-white/[0.02] rounded-xl transition-colors"
                 >
                   <div className="flex items-center gap-4">
                     {/* Position Number (italic serif) */}
@@ -208,13 +208,13 @@ export function HomePanelLeaderboardSection({
                     </div>
 
                     {/* Candidate Name */}
-                    <span className="font-medium text-sm sm:text-base text-white/95">
+                    <span className="font-medium text-sm sm:text-base text-text-primary dark:text-white/95">
                       {user.name}
                     </span>
                   </div>
 
                   {/* Rating / Score */}
-                  <span className="font-bold text-base sm:text-lg text-white font-mono">
+                  <span className="font-bold text-base sm:text-lg text-text-primary dark:text-white font-mono">
                     {user.points}
                   </span>
                 </div>
@@ -222,10 +222,10 @@ export function HomePanelLeaderboardSection({
             </div>
 
             {/* YOU ARE HERE Card */}
-            <div className="rounded-2xl bg-gradient-to-r from-[#20183e] to-[#2b1b4b] border border-purple-500/40 p-3.5 sm:p-4 flex items-center justify-between shadow-[0_0_25px_rgba(168,85,247,0.18)] mt-6">
+            <div className="rounded-2xl bg-gradient-to-r from-purple-100 via-fuchsia-50 to-indigo-100 border border-purple-300/80 dark:from-[#20183e] dark:to-[#2b1b4b] dark:border-purple-500/40 p-3.5 sm:p-4 flex items-center justify-between shadow-md dark:shadow-[0_0_25px_rgba(168,85,247,0.18)] mt-6">
               <div className="flex items-center gap-3">
                 {/* 2-line YOU ARE HERE tag */}
-                <div className="flex flex-col text-[9px] font-mono font-black uppercase tracking-wider text-purple-300 leading-tight">
+                <div className="flex flex-col text-[9px] font-mono font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 leading-tight">
                   <span>YOU ARE</span>
                   <span>HERE</span>
                 </div>
@@ -241,24 +241,24 @@ export function HomePanelLeaderboardSection({
                 </div>
 
                 {/* User Name */}
-                <span className="font-bold text-base sm:text-lg text-white">
+                <span className="font-bold text-base sm:text-lg text-text-primary dark:text-white">
                   {userName === 'Candidate' ? 'You' : userName}
                 </span>
               </div>
 
               {/* Current Points */}
-              <span className="font-bold text-lg sm:text-xl text-white font-mono">
+              <span className="font-bold text-lg sm:text-xl text-text-primary dark:text-white font-mono">
                 {userPoints}
               </span>
             </div>
           </div>
 
           {/* Bottom Action Link */}
-          <div className="pt-6 border-t border-white/5 mt-4">
+          <div className="pt-6 border-t border-border dark:border-white/5 mt-4">
             <Link
               href="/leaderboard"
               onClick={() => captureEvent('home_see_leaderboard_clicked')}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-white/95 hover:text-purple-300 transition-colors group"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-text-primary hover:text-purple-600 dark:text-white/95 dark:hover:text-purple-300 transition-colors group"
             >
               <span>See the leaderboard</span>
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
@@ -269,4 +269,3 @@ export function HomePanelLeaderboardSection({
     </section>
   );
 }
-

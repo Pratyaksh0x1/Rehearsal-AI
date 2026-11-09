@@ -25,7 +25,7 @@ export function Navbar() {
 
   return (
     <header className="sticky top-3.5 z-50 w-full px-4 sm:px-6 pointer-events-none">
-      <nav className="pointer-events-auto max-w-4xl mx-auto h-12 sm:h-13 rounded-full backdrop-blur-2xl bg-surface/80 dark:bg-[#0b0f19]/80 border border-white/20 dark:border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.35)] px-3 sm:px-5 flex items-center justify-between transition-all">
+      <nav className="pointer-events-auto max-w-4xl mx-auto h-12 sm:h-13 rounded-full backdrop-blur-2xl bg-surface/90 dark:bg-[#0b0f19]/80 border border-border dark:border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.35)] px-3 sm:px-5 flex items-center justify-between transition-all">
         {/* Logo */}
         <Link href={user ? '/home' : '/'} className="flex items-center gap-2 group flex-shrink-0">
           <div className="relative w-7 h-7 flex-shrink-0">
@@ -54,7 +54,7 @@ export function Navbar() {
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
                     isActive
                       ? 'bg-accent/15 text-accent font-semibold shadow-sm border border-accent/25'
-                      : 'text-text-muted hover:text-text-primary hover:bg-white/5'
+                      : 'text-text-muted hover:text-text-primary hover:bg-slate-100 dark:hover:bg-white/5'
                   }`}
                 >
                   {link.label}
@@ -71,7 +71,7 @@ export function Navbar() {
               {/* User badge preview */}
               <Link
                 href="/profile"
-                className="hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-border bg-surface hover:bg-surface-hover dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 transition-colors"
               >
                 <div className="relative w-4 h-4">
                   <Image src={rankDef.badgeUrl} alt={rankDef.displayName} fill />
@@ -86,7 +86,7 @@ export function Navbar() {
               <button
                 type="button"
                 onClick={() => signOut()}
-                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border border-white/10 bg-white/5 hover:bg-danger-subtle text-text-muted hover:text-danger transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border border-border bg-surface hover:bg-danger-subtle dark:border-white/10 dark:bg-white/5 text-text-muted hover:text-danger transition-colors"
                 title="Sign out"
               >
                 <LogOut className="w-3.5 h-3.5" />

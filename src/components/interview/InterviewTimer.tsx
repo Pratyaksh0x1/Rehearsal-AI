@@ -75,21 +75,21 @@ export function InterviewTimer({
     <div
       className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-xs font-bold border transition-all duration-300 shadow-sm ${
         isTimeUp
-          ? 'bg-red-500/20 border-red-500 text-red-200 animate-bounce'
+          ? 'bg-red-500/20 border-red-500 text-red-700 dark:text-red-200 animate-bounce'
           : isCritical
-            ? 'bg-red-500/15 border-red-500/40 text-red-300 animate-pulse'
+            ? 'bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-300 animate-pulse'
             : isWarning
-              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-              : 'bg-[#18152e]/90 border-white/15 text-white/95'
+              ? 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300'
+              : 'bg-surface border-border text-text-primary dark:bg-[#18152e]/90 dark:border-white/15 dark:text-white/95'
       } ${className}`}
       title={`Interview duration: ${totalMinutes} minutes`}
     >
       {isCritical || isTimeUp ? (
-        <AlertTriangle className="w-3.5 h-3.5 text-red-400 animate-pulse flex-shrink-0" />
+        <AlertTriangle className="w-3.5 h-3.5 text-red-500 dark:text-red-400 animate-pulse flex-shrink-0" />
       ) : (
         <Clock
           className={`w-3.5 h-3.5 flex-shrink-0 ${
-            isWarning ? 'text-amber-400' : 'text-purple-300'
+            isWarning ? 'text-amber-500' : 'text-purple-600 dark:text-purple-300'
           }`}
         />
       )}
@@ -111,3 +111,4 @@ export function resetInterviewTimer(interviewKey: string = 'technical') {
     // ignore
   }
 }
+
