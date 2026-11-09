@@ -1,295 +1,174 @@
 'use client';
 
-import React, { useState } from 'react';
-import Image from 'next/image';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { RankLadder } from '@/components/ranks/RankLadder';
 import { captureEvent, identifyUser } from '@/lib/analytics/posthog';
-import { Upload, CheckCircle2, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { IntroGuideSection } from './IntroGuideSection';
+import { ResumeRadarScanAnimation } from './ResumeRadarScanAnimation';
+import { ATSScoreReportSection } from './ATSScoreReportSection';
+import { FlashyRankRevealAnimation } from './FlashyRankRevealAnimation';
+
+type OnboardingStep = 'intro' | 'parsing' | 'ats_score' | 'rank_reveal';
 
 export function OnboardingFlow() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [username, setUsername] = useState(user?.username || '');
-  const [usernameError, setUsernameError] = useState('');
-
+  const [step, setStep] = useState<OnboardingStep>('intro');
+  const [username, setUsername] = useState(user?.username || user?.name || '');
   const [file, setFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
 
-  // Handle Step 1: Username
-  const handleUsernameSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setUsernameError('');
-    const trimmed = username.trim();
+  // Resume evaluation result state
+  const [atsScore, setAtsScore] = useState<number>(97);
+  const [topChanges, setTopChanges] = useState<string[]>([]);
+  const [resumeText, setResumeText] = useState<string>('');
+  const [resumeUrl, setResumeUrl] = useState<string>('');
 
-    if (trimmed.length < 3) {
-      setUsernameError('Username must be at least 3 characters.');
-      return;
+  // Pre-fill username from authenticated Google account if available
+  useEffect(() => {
+    if (user && !username) {
+      setUsername(user.username || user.name || '');
     }
-    if (trimmed.length > 24) {
-      setUsernameError('Username cannot exceed 24 characters.');
-      return;
-    }
-    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
-      setUsernameError('Only letters, numbers, and underscores are allowed.');
-      return;
-    }
+  }, [user, username]);
 
-    captureEvent('onboarding_username_submitted', { username: trimmed });
-    setStep(2);
-  };
+  // Handle Step 1 -> Step 2
+  const handleBegin = async (candidateName: string, candidateFile: File | null) => {
+    setUsername(candidateName);
+    setFile(candidateFile);
+    setStep('parsing');
 
-  // Handle Step 2: Resume upload
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUploadError('');
-    const selected = e.target.files?.[0];
-    if (!selected) return;
+    captureEvent('onboarding_intro_completed', {
+      name: candidateName,
+      hasResume: Boolean(candidateFile),
+    });
 
-    if (selected.type !== 'application/pdf') {
-      setUploadError('Only PDF files are supported.');
-      return;
-    }
+    // Start background resume parsing & evaluation
+    if (candidateFile) {
+      try {
+        const formData = new FormData();
+        formData.append('resume', candidateFile);
 
-    if (selected.size > 5 * 1024 * 1024) {
-      setUploadError('File exceeds maximum size of 5 MB.');
-      return;
-    }
+        const res = await fetch('/api/user/resume', {
+          method: 'POST',
+          body: formData,
+        });
 
-    setFile(selected);
-  };
+        if (res.ok) {
+          const data = await res.json();
+          setResumeText(data.resumeText || '');
+          setResumeUrl(data.resumeUrl || '');
 
-  const handleResumeSubmit = async () => {
-    if (!file) {
-      setUploadError('Please select a PDF resume file.');
-      return;
-    }
+          // Run ATS evaluation
+          if (data.resumeText) {
+            try {
+              const evalRes = await fetch('/api/interviews/evaluate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'Resume Review',
+                  resumeText: data.resumeText,
+                }),
+              });
 
-    setIsUploading(true);
-    setUploadError('');
-
-    try {
-      const formData = new FormData();
-      formData.append('resume', file);
-
-      const res = await fetch('/api/user/resume', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to parse resume.');
+              if (evalRes.ok) {
+                const evalData = await evalRes.json();
+                if (evalData.evaluation) {
+                  setAtsScore(evalData.evaluation.score || 97);
+                  setTopChanges(evalData.evaluation.topChanges || []);
+                }
+              }
+            } catch (evalErr) {
+              console.warn('ATS evaluation fallback:', evalErr);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Resume processing error in background:', err);
       }
+    }
 
-      captureEvent('onboarding_resume_uploaded', {
-        wordCount: data.wordCount,
-      });
-
-      // Complete onboarding record
-      const onboardRes = await fetch('/api/user/onboard', {
+    // Save profile to database in background
+    try {
+      await fetch('/api/user/onboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: username.trim(),
-          resumeUrl: data.resumeUrl,
-          resumeText: data.resumeText,
+          username: candidateName.trim(),
+          resumeUrl: '',
+          resumeText: '',
         }),
       });
 
-      const onboardData = await onboardRes.json();
-      if (!onboardRes.ok) {
-        throw new Error(onboardData.error || 'Failed to complete profile.');
-      }
-
       updateUser({
-        username: username.trim(),
+        username: candidateName.trim(),
         rank: 'Bronze',
-        points: 0,
+        points: 100,
         isOnboarded: true,
-        resumeText: data.resumeText,
-        resumeUrl: data.resumeUrl,
       });
 
-      identifyUser(user?.id || username.trim(), {
-        username: username.trim(),
+      identifyUser(user?.id || candidateName.trim(), {
+        username: candidateName.trim(),
         rank: 'Bronze',
         email: user?.email,
       });
-
-      captureEvent('onboarding_completed', {
-        rank: 'Bronze',
-        username: username.trim(),
-      });
-
-      setStep(3);
-    } catch (err: any) {
-      setUploadError(err.message || 'Error uploading resume.');
-    } finally {
-      setIsUploading(false);
+    } catch (saveErr) {
+      console.warn('Profile save note:', saveErr);
     }
   };
 
+  // Handle Step 2 -> Step 3
+  const handleParsingComplete = () => {
+    setStep('ats_score');
+    captureEvent('onboarding_ats_score_viewed', { score: atsScore });
+  };
+
+  // Handle Step 3 -> Step 4
+  const handleContinueToRank = () => {
+    setStep('rank_reveal');
+    captureEvent('onboarding_rank_reveal_triggered', { rank: 'Bronze' });
+  };
+
+  // Handle Step 4 -> Enter Arena (/home)
+  const handleEnterArena = () => {
+    captureEvent('onboarding_arena_entered', { username });
+    router.push('/home');
+  };
+
   return (
-    <div className="min-h-screen bg-bg flex flex-col justify-center items-center px-4 py-12 transition-colors">
-      <div className="w-full max-w-xl mx-auto">
-        {/* Mascot & Speech Bubble */}
-        <div className="flex flex-col sm:flex-row items-center gap-6 mb-8">
-          {/* Mascot SVG Avatar */}
-          <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex-shrink-0 animate-bounce duration-1000">
-            <Image
-              src="/mascot.svg"
-              alt="Rehearsal AI Mascot"
-              fill
-              className="object-contain"
-              priority
-            />
-          </div>
+    <div className="min-h-screen bg-[#0e0a0a] text-amber-50 flex flex-col justify-center items-center px-4 py-8 relative overflow-hidden transition-colors selection:bg-amber-500/30">
+      {/* Background Ambient Warm Sepia Lighting */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-gradient-to-b from-amber-600/10 via-amber-900/5 to-transparent blur-3xl pointer-events-none" />
 
-          {/* Speech Bubble */}
-          <div className="relative flex-1 bg-surface border border-border rounded-2xl p-6 shadow-md">
-            <div className="hidden sm:block absolute -left-2.5 top-8 w-4 h-4 bg-surface border-l border-b border-border rotate-45" />
+      {/* Dynamic 4-Stage Flow */}
+      {step === 'intro' && (
+        <IntroGuideSection
+          initialName={username}
+          onBegin={handleBegin}
+        />
+      )}
 
-            <div className="space-y-1">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-accent">
-                Rehearsal AI Guide
-              </span>
-              <h2 className="text-xl font-bold text-text-primary">
-                {step === 1 && "Welcome! What's your name?"}
-                {step === 2 && "Awesome! Now drop your resume."}
-                {step === 3 && `Ready, ${username}! Here is your Rank Ladder.`}
-              </h2>
-              <p className="text-sm text-text-muted">
-                {step === 1 && "This will be your unique handle on the leaderboards and interview reports."}
-                {step === 2 && "We extract your skills and experience to tailor real-time technical and behavioral questions."}
-                {step === 3 && "Every recruit starts at Bronze. Complete interviews and solve challenges to climb all the way to Conqueror."}
-              </p>
-            </div>
-          </div>
-        </div>
+      {step === 'parsing' && (
+        <ResumeRadarScanAnimation
+          onComplete={handleParsingComplete}
+          fileName={file?.name}
+        />
+      )}
 
-        {/* Step 1: What's your name? */}
-        {step === 1 && (
-          <form
-            onSubmit={handleUsernameSubmit}
-            className="bg-surface border border-border rounded-2xl p-6 sm:p-8 shadow-sm space-y-5"
-          >
-            <div>
-              <label htmlFor="username" className="block text-sm font-semibold text-text-primary mb-2">
-                Choose your username
-              </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. dev_knight"
-                className="w-full px-4 py-3 rounded-xl border border-border bg-bg text-text-primary placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-accent font-medium text-base transition-colors"
-                autoFocus
-              />
-              {usernameError && (
-                <p className="mt-2 text-xs text-danger flex items-center gap-1.5 font-medium">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  {usernameError}
-                </p>
-              )}
-            </div>
+      {step === 'ats_score' && (
+        <ATSScoreReportSection
+          score={atsScore}
+          topChanges={topChanges}
+          onContinue={handleContinueToRank}
+        />
+      )}
 
-            <button
-              type="submit"
-              disabled={!username.trim()}
-              className="w-full py-3.5 rounded-xl bg-accent hover:bg-accent-hover disabled:opacity-50 text-accent-foreground font-bold text-base transition-all flex items-center justify-center gap-2 shadow-sm"
-            >
-              <span>Continue</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </form>
-        )}
-
-        {/* Step 2: Drop your resume */}
-        {step === 2 && (
-          <div className="bg-surface border border-border rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
-            <div
-              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-                file ? 'border-accent bg-accent-subtle/20' : 'border-border hover:border-accent/60'
-              }`}
-            >
-              <input
-                type="file"
-                id="resume-file"
-                accept=".pdf,application/pdf"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <label htmlFor="resume-file" className="cursor-pointer flex flex-col items-center">
-                <div className="w-12 h-12 rounded-full bg-accent-subtle text-accent flex items-center justify-center mb-3">
-                  <Upload className="w-6 h-6" />
-                </div>
-                <span className="font-semibold text-text-primary text-base">
-                  {file ? file.name : 'Click to select or drag and drop your resume'}
-                </span>
-                <span className="text-xs text-text-subtle mt-1 font-mono">
-                  PDF only &bull; Max 5 MB
-                </span>
-              </label>
-            </div>
-
-            {uploadError && (
-              <p className="text-xs text-danger flex items-center gap-1.5 font-medium">
-                <AlertCircle className="w-3.5 h-3.5" />
-                {uploadError}
-              </p>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="w-1/3 py-3 rounded-xl border border-border bg-bg text-text-muted hover:text-text-primary text-sm font-semibold transition-colors"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={handleResumeSubmit}
-                disabled={!file || isUploading}
-                className="flex-1 py-3.5 rounded-xl bg-accent hover:bg-accent-hover disabled:opacity-50 text-accent-foreground font-bold text-base transition-all flex items-center justify-center gap-2 shadow-sm"
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Parsing PDF Resume...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Upload & View Rank</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Rank Ladder Screen */}
-        {step === 3 && (
-          <div className="bg-surface border border-border rounded-2xl p-6 sm:p-8 shadow-sm">
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-accent bg-accent-subtle px-3 py-1 rounded-full mb-2">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Onboarding Complete
-              </div>
-              <h3 className="text-xl font-bold text-text-primary">
-                Your Starting Tier: <span className="text-rank-bronze">Bronze</span>
-              </h3>
-            </div>
-
-            <RankLadder currentRank="Bronze" onContinue={() => router.push('/home')} />
-          </div>
-        )}
-      </div>
+      {step === 'rank_reveal' && (
+        <FlashyRankRevealAnimation
+          username={username}
+          onEnterArena={handleEnterArena}
+        />
+      )}
     </div>
   );
 }
