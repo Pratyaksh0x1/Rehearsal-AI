@@ -1,119 +1,155 @@
-# Rehearsal AI 🎙️💻
+# Rehearsal AI
 
-> **Master your coding and behavioral interviews with specialized AI panelists, real-time voice feedback, and PUBG-style rank progression.**
+Rehearsal AI is a voice-first interview practice application. Candidates can work through timed technical coding, behavioral HR, and resume-review sessions with AI interviewers, then review feedback and rank progress.
 
-Built with Next.js 14 (App Router), TypeScript, Tailwind CSS, Neon Postgres, Drizzle ORM, NextAuth, and Gnani Voice.
+## Features
 
----
+- **Technical interviews (20 minutes):** Work through a generated coding problem in the Monaco editor, discuss your approach with a voice interviewer, run visible tests, and submit against visible and hidden tests.
+- **Behavioral HR interviews (10 minutes):** Practice five STAR-based behavioral questions in a voice conversation.
+- **Resume review (20 minutes):** Discuss resume projects with an AI strategist and receive an ATS-style audit with concrete suggestions.
+- **Voice interaction:** Gnani.ai speech-to-text and text-to-speech integration, live voice-state indicators, microphone controls, and interviewer profiles.
+- **Interview proctoring:** Camera and microphone preview, screen/activity monitoring, and conduct warnings in interview workspaces. Browser permissions are required for live media.
+- **Code execution:** Supports Python, JavaScript, C++, and Java in the local runner. An optional Piston-compatible service can be configured for remote execution.
+- **CS concept explainer:** Ask computer science questions and receive structured explanations with diagrams on a sketchbook-style blackboard; supports multiple Indian languages.
+- **Accounts and progress:** Google sign-in through Supabase Auth, onboarding, profile and resume management, technical and HR leaderboards, and six rank tiers: Bronze, Gold, Platinum, Diamond, Crown, and Conqueror.
+- **Theme support:** Light and dark themes with an animated cursor effect.
 
-## 🚀 Features
+## Application routes
 
-- **PUBG-Style Rank Progression**: 6 rank tiers: **Bronze, Gold, Platinum, Diamond, Crown, Conqueror** with custom SVG vector badges and tailored problem pools.
-- **Three Core Interview Tracks**:
-  1. **Technical Round**: Monaco code editor, sandboxed execution judge (Judge0 / Piston), AI interviewer assessing approach, edge cases, and time/space complexity.
-  2. **HR Behavioral Round**: 5-question STAR methodology interview with vocal assessment of communication, ownership, and clarity.
-  3. **Resume Review**: ATS compatibility score out of 100, section breakdowns, actionable changes, and bullet point rewrites.
-- **Voice System**: Gnani.ai STT & TTS integration with audio streaming, mute/replay controls, and fallback text input.
-- **Provider-Agnostic LLM Engine**: Swappable wrapper supporting Google Gemini, OpenAI, and xAI Grok with schema validation via Zod, retries, and rate limiting.
-- **Theme System**: Zero-flash dark/light theme switching powered by CSS variables and design tokens.
-- **Onboarding Mascot**: Friendly AI bot guiding candidates through username selection, resume parsing (<5MB PDF), and rank ladder visualization.
-- **Leaderboard & Profile**: Filterable rankings by rank tier, interview history with full feedback reports, and problem report logging.
+| Route | Purpose |
+| --- | --- |
+| `/` | Public landing page and Google sign-in |
+| `/onboarding` | Initial candidate profile setup |
+| `/home` | Signed-in dashboard |
+| `/interview/technical` | Technical coding interview |
+| `/interview/hr` | Behavioral HR interview |
+| `/interview/resume` | Resume review and discussion |
+| `/explainer` | CS concept explainer |
+| `/leaderboard` | Rank leaderboards |
+| `/profile` | Candidate profile and resume |
 
----
+Most application pages require authentication. Google OAuth must be enabled and configured in the Supabase project.
 
-## 🛠️ Tech Stack
+## Technology
 
-- **Framework**: Next.js 14 (App Router) + React 18 + TypeScript
-- **Styling**: Tailwind CSS with CSS variable design tokens
-- **Database**: PostgreSQL on Neon or Supabase Postgres with Drizzle ORM
-- **Authentication**: Supabase Auth (Google OAuth + Demo bypass)
-- **Product Analytics**: PostHog (`posthog-js`) + Vercel Analytics
-- **Voice**: Gnani.ai STT & TTS
-- **Code Execution**: Piston API (EMKC Piston Sandbox)
-- **PDF Text Extraction**: `pdf-parse`
+- Next.js 14 App Router, React 18, and TypeScript
+- Tailwind CSS and CSS-variable-based light/dark themes
+- Supabase Auth
+- PostgreSQL with Drizzle ORM (Neon or Supabase PostgreSQL)
+- Gemini, DeepSeek, OpenRouter, or xAI Grok through the LLM provider wrapper
+- Gnani.ai voice services with Web Audio APIs
+- Monaco Editor and a local code runner, with optional remote Piston execution
+- PostHog analytics (optional)
 
----
+## Requirements
 
-## 🏁 Quickstart
+- Node.js 20 LTS recommended
+- npm
+- PostgreSQL database for persistent account and interview data
+- Python and Node.js available on the host for local code execution; `g++` and `javac` are additionally required to run C++ and Java locally
+- Supabase project credentials and Google OAuth configuration for sign-in and protected pages
+- API credentials for the AI features you want to use (see below)
 
-### 1. Clone & Install Dependencies
+## Getting started
+
+### 1. Install
 
 ```bash
-git clone <repo-url>
-cd "rehearsel ai"
+git clone https://github.com/Pratyaksh0x1/Rehearsal-AI.git
+cd Rehearsal-AI
 npm install
 ```
 
-### 2. Configure Environment Variables
+### 2. Configure environment variables
 
-Copy the example environment file and fill in your credentials:
+Copy `.env.example` to `.env` and replace placeholders with your own values. In PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+On macOS or Linux:
 
 ```bash
 cp .env.example .env
 ```
 
-Key environment variables:
-- `DATABASE_URL`: Connection string for Neon Postgres
-- `NEXTAUTH_SECRET`: Random 32+ character string
-- `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`: Google OAuth credentials
-- `GNANI_API_KEY`, `GNANI_STT_URL`, `GNANI_TTS_URL`: Gnani Voice API
-- `GEMINI_API_KEY` (or `OPENAI_API_KEY` / `GROK_API_KEY`): LLM API keys
-- `JUDGE_SERVICE_URL`: Sandboxed execution endpoint (Piston / Judge0)
+Configure these values:
 
-### 3. Run Database Migrations & Seed Problems
+| Variable | Required for | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | Persistent database features and Drizzle commands | PostgreSQL connection string. |
+| `NEXT_PUBLIC_SUPABASE_URL` | Authentication and protected application pages | Supabase project URL. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Authentication and protected application pages | Supabase publishable/anon key. |
+| `LLM_PROVIDER` | Selecting the primary LLM provider | `gemini` (default), `deepseek`, `openrouter`, or `grok`. |
+| `GEMINI_API_KEY` | Gemini-powered AI features | Also set `GEMINI_MODEL` if you want to override the default. |
+| `DEEPSEEK_API_KEY` | DeepSeek-powered AI features | Optional provider key. |
+| `OPENROUTER_API_KEY` | OpenRouter-powered AI features | Optional provider key. |
+| `GROK_API_KEY` | xAI Grok-powered AI features | Optional provider key. |
+| `GNANI_API_KEY` | Gnani.ai voice services | Needed for the configured Gnani STT/TTS service. |
+| `JUDGE_SERVICE_URL` | Remote code execution | Optional Piston-compatible execution endpoint. If unset, the application uses its local runner. |
+| `JUDGE_API_KEY` | Authenticated remote code execution | Optional key for the configured judge endpoint. |
+| `NEXT_PUBLIC_POSTHOG_KEY` | Product analytics | Optional; PostHog is not required to run the application. |
+| `NEXT_PUBLIC_POSTHOG_HOST` | Product analytics | Optional; defaults to `https://us.i.posthog.com`. |
+| `NEXT_PUBLIC_APP_URL` | Absolute application metadata URLs | Optional; defaults to `http://localhost:3000`. |
 
-Generate and apply migrations to your Neon database:
+The `.env.example` file includes additional optional model, voice, and endpoint settings. Never commit real credentials. Enable Google as an OAuth provider in the Supabase dashboard and configure its redirect URLs for your local and deployed application origins.
+
+### 3. Prepare the database
+
+For local development, apply the current Drizzle schema to the configured PostgreSQL database:
 
 ```bash
-# Push schema or run migration script
 npm run db:push
-# or
-npm run db:migrate
-
-# Seed curated problem pool into Postgres
-npm run seed
 ```
 
-### 4. Run Development Server
+To generate SQL migrations after changing the schema:
+
+```bash
+npm run db:generate
+```
+
+`npm run db:migrate` executes the SQL files in `drizzle/`; review the pending SQL before running it against a database. The optional `npm run seed` command generates and saves problems and requires the database and an available LLM provider.
+
+### 4. Start the development server
 
 ```bash
 npm run dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) to start practicing!
+Open [http://localhost:3000](http://localhost:3000).
 
----
+## Available npm scripts
 
-## 📂 Project Architecture
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the Next.js development server. |
+| `npm run build` | Create a production build. |
+| `npm run start` | Start the production server after building. |
+| `npm run lint` | Run Next.js linting. |
+| `npx tsc --noEmit` | Type-check the project without emitting files. |
+| `npm run db:generate` | Generate Drizzle SQL migrations from the schema. |
+| `npm run db:push` | Push the Drizzle schema to the configured database. |
+| `npm run db:migrate` | Execute SQL migration files in `drizzle/`. |
+| `npm run seed` | Generate and save rank-based interview problems. |
 
+## Project layout
+
+```text
+src/
+  app/                 Next.js routes, pages, and API route handlers
+  components/          Interview, editor, explainer, auth, and shared UI
+  config/              Interviewer profiles, ranks, and language settings
+  db/                  Drizzle database client, schema, and migration runner
+  lib/                 Auth, AI/LLM, voice, judge, problems, and utilities
+drizzle/               Drizzle schema migrations and metadata
+public/                Static images, avatars, rank badges, and assets
+scripts/               Database and problem-generation utilities
 ```
-├── config/
-│   ├── ranks.ts          # Rank ladder definitions & TODO placeholders
-│   ├── panels.ts         # AI panelist configurations & Gnani voice IDs
-│   └── problemPools.ts   # Problem topic progression & Codeforces rating ranges
-├── drizzle/              # Generated SQL database migrations
-├── public/
-│   ├── ranks/            # 6 PUBG-style SVG rank badges
-│   ├── avatars/          # AI panelist avatar SVGs
-│   ├── logo.svg          # Minimal curly-braces sound wave logo
-│   └── mascot.svg        # Onboarding guide character
-├── src/
-│   ├── app/              # Next.js App Router (Landing, Home, Interviews, Leaderboard, Profile)
-│   ├── components/       # Reusable UI components (Editor, Voice, RankLadder, Navbar)
-│   ├── db/               # Drizzle ORM schema & Neon client
-│   ├── lib/
-│   │   ├── llm/          # Provider-agnostic wrapper (Gemini, OpenAI, Grok) + Zod schemas
-│   │   ├── voice/        # Gnani STT & TTS client
-│   │   ├── judge/        # Sandboxed code execution
-│   │   └── resume/       # PDF parsing & storage
-│   └── data/             # Curated LeetCode & Codeforces seed dataset
-└── scripts/
-    └── seed-problems.ts  # Problem database seeder
-```
 
----
+## Notes
 
-## 👥 Credits
-
-Made with love and tea by **Pratyaksh Tomar** and **Preet Chaudhary**.
-
+- Actual AI responses require credentials for a configured LLM provider. The application includes fallback behavior when providers are unavailable; this is not a substitute for configuring a provider in production.
+- Local code execution depends on the corresponding language runtime/compiler being installed on the machine running Next.js. Alternatively, configure a Piston-compatible `JUDGE_SERVICE_URL`.
+- Camera and microphone features run in the browser and require the candidate to grant the relevant permissions.
+- Database migrations and seed commands modify the configured database. Use a development database while setting up or testing the project.
