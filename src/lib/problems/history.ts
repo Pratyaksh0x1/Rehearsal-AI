@@ -119,11 +119,7 @@ You can return the answer in any order.`,
       java: 'class Solution {\n    public int[] solve(int[] nums, int target) {\n        return new int[0];\n    }\n}\n',
     },
     test_cases: p.test_cases || fallbackTestCases,
-    hints: p.hints || [
-      'Can you solve this in a single pass without comparing every pair?',
-      'Consider using an associative lookup container to store complements.',
-      'Check if target minus current element has already been visited before inserting.',
-    ],
+    hints: p.hints || [],
   };
 }
 

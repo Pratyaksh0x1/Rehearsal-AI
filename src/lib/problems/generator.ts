@@ -35,7 +35,7 @@ export const GeneratedProblemSchema = z.object({
     })
   ),
   solution_approach: z.string(),
-  hints: z.array(z.string()),
+  hints: z.array(z.string()).default([]),
   optimal_complexity: z.object({
     time: z.string(),
     space: z.string(),
@@ -115,12 +115,8 @@ Strict Requirements:
    - In JS, use: function solution(...)
    - In C++, provide valid function declaration.
    - In Java, provide public class Solution.
-3. "hints": exactly 3 progressive hints:
-   - Hint 1: Gentle conceptual check ("Think about what you've seen...")
-   - Hint 2: Data structure suggestion ("A lookup table could reduce...")
-   - Hint 3: Algorithmic outline without full code ("Keep running tracking of...")
-4. "rank_tier": exactly "${tierKey}".
-5. Return valid JSON strictly matching the schema.`;
+3. "rank_tier": exactly "${tierKey}".
+4. Return valid JSON strictly matching the schema. No hints should be included ("hints": []).`;
 
   const userPrompt = `Generate a single complete DSA interview problem for rank tier ${tierKey}.
 Difficulty: ${spec.difficulty}
@@ -228,11 +224,7 @@ Return the ordering of courses you should take to finish all courses. If there a
         { input: '3, [[1,0],[2,1],[0,2]]', expected_output: '[]', is_hidden: true }, // Hidden 3-node cycle
       ],
       solution_approach: 'Use Kahn algorithm for Topological Sort with in-degree tracking and a queue.',
-      hints: [
-        'Can we model courses as vertices and prerequisites as directed edges?',
-        'What does a cycle in a directed dependency graph signify?',
-        'Maintain an in-degree array for each course and enqueue nodes with in-degree 0.',
-      ],
+      hints: [],
       optimal_complexity: { time: 'O(V + E)', space: 'O(V + E)' },
       follow_up_questions: ['How would you modify this to detect all cycles in a distributed build dependency graph?'],
     };
@@ -266,11 +258,7 @@ Return the ordering of courses you should take to finish all courses. If there a
         { input: '"abcdefghijklmnopqrstuvwxyz"', expected_output: '26', is_hidden: true }, // Hidden full alphabet
       ],
       solution_approach: 'Use a sliding window with two pointers [left, right] and a hash set or last-seen index map.',
-      hints: [
-        'How can a window [L, R] expand until a duplicate character is encountered?',
-        'When a duplicate is found, where should L move?',
-        'Store the last seen index of each character to skip L forward in O(1).',
-      ],
+      hints: [],
       optimal_complexity: { time: 'O(n)', space: 'O(min(n, m))' },
       follow_up_questions: ['What if the character set includes unicode emojis and UTF-8 multibyte glyphs?'],
     };
@@ -304,11 +292,7 @@ Return the ordering of courses you should take to finish all courses. If there a
       { input: '[1000000000, 500000000, 500000000], 1000000000', expected_output: '[1,2]', is_hidden: true }, // Hidden large integers
     ],
     solution_approach: 'Use a hash map to store elements seen so far and their indices. For each element x, check if (target - x) is in the map.',
-    hints: [
-      'Can you do better than comparing every pair in O(n^2)?',
-      'What data structure allows O(1) lookups for the complement (target - x)?',
-      'Iterate through nums once, checking if target - num exists in your map before inserting num.',
-    ],
+    hints: [],
     optimal_complexity: { time: 'O(n)', space: 'O(n)' },
     follow_up_questions: ['What if the input array is already sorted?'],
   };
