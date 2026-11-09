@@ -76,3 +76,4 @@
   <circle cx="256" cy="235" r="16" fill="url(#goldRim)" stroke="#fef08a" stroke-width="3"/>
   <polygon points="256,170 266,190 288,193 272,208 276,230 256,219 236,230 240,208 224,193 246,190" fill="#fef08a"/>
 </svg>
+
