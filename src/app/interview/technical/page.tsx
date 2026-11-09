@@ -12,6 +12,7 @@ import { EvaluationModal } from '@/components/interview/EvaluationModal';
 import { ProctorCamera } from '@/components/interview/ProctorCamera';
 import { InterviewTimer, resetInterviewTimer } from '@/components/interview/InterviewTimer';
 import { BeforeYouStartSection } from '@/components/interview/BeforeYouStartSection';
+import { EnvironmentSetupAnimation } from '@/components/interview/EnvironmentSetupAnimation';
 import { ExecutionResult } from '@/lib/judge';
 import { captureEvent } from '@/lib/analytics/posthog';
 import {
@@ -107,13 +108,13 @@ export default function TechnicalRoundPage() {
     return next;
   };
 
-  // Interview script state: lobby -> intro (welcome + problem briefing) -> live (discussion) 
+  // Interview script state: lobby -> setting-environment -> intro (welcome + briefing) -> live (discussion) 
   const voiceRef = useRef<VoicePanelHandle>(null);
-  const [phase, setPhase] = useState<'lobby' | 'intro' | 'live'>(
-    autoStartParam ? 'intro' : 'lobby'
+  const [phase, setPhase] = useState<'lobby' | 'setting-environment' | 'intro' | 'live'>(
+    autoStartParam ? 'setting-environment' : 'lobby'
   );
-  const phaseRef = useRef<'lobby' | 'intro' | 'live'>(
-    autoStartParam ? 'intro' : 'lobby'
+  const phaseRef = useRef<'lobby' | 'setting-environment' | 'intro' | 'live'>(
+    autoStartParam ? 'setting-environment' : 'lobby'
   );
   const complexityAskedRef = useRef(false);
   const submitNudgedRef = useRef(false);
@@ -275,15 +276,15 @@ export default function TechnicalRoundPage() {
     hasNudgedRef.current = false;
   };
 
-  // Automatically start voice introduction if launched directly from Step 3
+  // When environment setup completes and phase transitions to 'intro', trigger voice introduction
   useEffect(() => {
-    if (autoStartParam) {
+    if (phase === 'intro') {
       const timer = setTimeout(() => {
         void startInterview();
-      }, 500);
+      }, 300);
       return () => clearTimeout(timer);
     }
-  }, [autoStartParam]);
+  }, [phase]);
 
   // Handle user speech or text message to the AI interviewer
   const handleUserMessage = async (
@@ -501,11 +502,33 @@ export default function TechnicalRoundPage() {
           <BeforeYouStartSection
             onBack={() => router.push('/interview')}
             onStartInterview={() => {
+              phaseRef.current = 'setting-environment';
+              setPhase('setting-environment');
+            }}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  if (phase === 'setting-environment') {
+    return (
+      <div className="min-h-screen bg-bg dark:bg-[#0a0818] text-text-primary flex flex-col transition-colors selection:bg-purple-500/30">
+        <Navbar />
+        <main className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full flex flex-col items-center justify-center">
+          <EnvironmentSetupAnimation
+            interviewerName={interviewer.name}
+            interviewerRole={interviewer.role}
+            interviewerAvatar={interviewer.avatarUrl}
+            language={language}
+            company={companyParam}
+            durationMs={2600}
+            onComplete={() => {
               phaseRef.current = 'intro';
               setPhase('intro');
               setTimeout(() => {
                 void startInterview();
-              }, 250);
+              }, 200);
             }}
           />
         </main>
