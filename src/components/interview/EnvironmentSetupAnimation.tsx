@@ -217,3 +217,4 @@ export function EnvironmentSetupAnimation({
     </div>
   );
 }
+

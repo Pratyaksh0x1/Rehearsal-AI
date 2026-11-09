@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from '@/components/theme/ThemeProvider';
-import { Play, RotateCcw, Check, Loader2 } from 'lucide-react';
+import { Play, RotateCcw, Loader2, Eye } from 'lucide-react';
 
 // Dynamic import of Monaco Editor to avoid SSR hydration issues
 const Monaco = dynamic(() => import('@monaco-editor/react'), { ssr: false });
@@ -11,6 +11,7 @@ const Monaco = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 export const DEFAULT_STARTER_CODE: Record<string, string> = {
   python: `class Solution:
     def solve(self, nums: list[int], target: int) -> list[int]:
+        # Write your solution here
         pass
 `,
   javascript: `/**
@@ -19,11 +20,11 @@ export const DEFAULT_STARTER_CODE: Record<string, string> = {
  * @return {number[]}
  */
 function solve(nums, target) {
-    
+    // Write your solution here
 }
 `,
   typescript: `function solve(nums: number[], target: number): number[] {
-    
+    // Write your solution here
 }
 `,
   cpp: `#include <vector>
@@ -32,12 +33,13 @@ using namespace std;
 class Solution {
 public:
     vector<int> solve(vector<int>& nums, int target) {
-        
+        // Write your solution here
     }
 };
 `,
   java: `class Solution {
     public int[] solve(int[] nums, int target) {
+        // Write your solution here
         return new int[0];
     }
 }
@@ -51,6 +53,8 @@ interface CodeEditorProps {
   onLanguageChange: (lang: string) => void;
   onRunCode: () => void;
   isRunning?: boolean;
+  interviewerName?: string;
+  onSubmitSolution?: () => void;
 }
 
 export function CodeEditor({
@@ -60,6 +64,8 @@ export function CodeEditor({
   onLanguageChange,
   onRunCode,
   isRunning = false,
+  interviewerName = 'Tanya',
+  onSubmitSolution,
 }: CodeEditorProps) {
   const { theme } = useTheme();
 
@@ -69,68 +75,49 @@ export function CodeEditor({
   };
 
   const monacoLanguage = language === 'cpp' ? 'cpp' : language;
+  const displayLang =
+    language === 'cpp'
+      ? 'C++'
+      : language === 'java'
+      ? 'Java'
+      : language === 'javascript'
+      ? 'JavaScript'
+      : 'Python';
 
   return (
-    <div className="flex flex-col h-full border border-border rounded-xl overflow-hidden bg-surface shadow-sm">
-      {/* Editor Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-bg-subtle border-b border-border">
-        {/* Language selector */}
-        <div className="flex items-center gap-2">
-          <label htmlFor="editor-lang" className="text-xs font-semibold text-text-muted">
-            Language:
-          </label>
-          <select
-            id="editor-lang"
-            value={language}
-            onChange={(e) => {
-              const newLang = e.target.value;
-              onLanguageChange(newLang);
-              onChange(DEFAULT_STARTER_CODE[newLang] || '');
-            }}
-            className="text-xs font-mono font-medium px-2.5 py-1 rounded-md bg-surface border border-border text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-          >
-            <option value="python">Python 3</option>
-            <option value="javascript">JavaScript (Node.js)</option>
-            <option value="typescript">TypeScript</option>
-            <option value="cpp">C++ 17</option>
-            <option value="java">Java 15</option>
-          </select>
+    <div className="flex flex-col h-full border border-border dark:border-white/10 rounded-2xl overflow-hidden bg-surface dark:bg-[#15101a] shadow-sm">
+      {/* Editor Toolbar matching media_1794199229585_34e388fa.jpg */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-bg-subtle dark:bg-[#1a1424] border-b border-border dark:border-white/10">
+        {/* Solution Tab + Language Badge */}
+        <div className="flex items-center gap-2.5">
+          <span className="text-xs font-semibold text-text-primary dark:text-white">
+            Solution
+          </span>
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-[#f59e0b] border border-amber-500/30">
+            {displayLang}
+          </span>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2">
+        {/* Right side: Interviewer watching notice + Reset */}
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-400">
+            <Eye className="w-3.5 h-3.5 text-zinc-500" />
+            <span>{interviewerName} sees your code as you type</span>
+          </div>
+
           <button
             type="button"
             onClick={handleReset}
-            className="px-2.5 py-1 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors flex items-center gap-1.5"
+            className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-surface-hover dark:hover:bg-white/5 transition-colors cursor-pointer"
             title="Reset to starter template"
           >
-            <RotateCcw className="w-3 h-3" />
-            <span>Reset</span>
-          </button>
-          <button
-            type="button"
-            onClick={onRunCode}
-            disabled={isRunning}
-            className="px-3.5 py-1 text-xs font-bold rounded-md bg-success hover:bg-success/90 text-success-foreground transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
-          >
-            {isRunning ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Running...</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Run Code</span>
-              </>
-            )}
+            <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
       {/* Monaco Code Editor Area */}
-      <div className="flex-1 min-h-[360px] relative">
+      <div className="flex-1 min-h-[380px] relative">
         <Monaco
           height="100%"
           language={monacoLanguage}
@@ -145,11 +132,44 @@ export function CodeEditor({
             scrollBeyondLastLine: false,
             automaticLayout: true,
             tabSize: 4,
-            padding: { top: 12, bottom: 12 },
+            padding: { top: 14, bottom: 14 },
           }}
         />
+      </div>
+
+      {/* Bottom Action Controls matching media_1794199229585_34e388fa.jpg */}
+      <div className="flex items-center justify-between px-4 py-3 bg-bg-subtle dark:bg-[#1a1424] border-t border-border dark:border-white/10">
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={onRunCode}
+            disabled={isRunning}
+            className="px-5 py-2 text-xs font-semibold rounded-full bg-white/5 hover:bg-white/10 text-zinc-200 border border-white/10 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            {isRunning ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#f59e0b]" />
+                <span>Running tests...</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3.5 h-3.5 fill-current text-emerald-400" />
+                <span>Run test cases</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {onSubmitSolution && (
+          <button
+            type="button"
+            onClick={onSubmitSolution}
+            className="px-6 py-2 rounded-full font-bold text-slate-950 text-xs sm:text-sm bg-gradient-to-r from-[#d8973c] via-[#f7cf7c] to-[#d8973c] hover:brightness-105 shadow-[0_0_15px_rgba(247,214,136,0.3)] transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <span>Submit solution</span>
+          </button>
+        )}
       </div>
     </div>
   );
 }
-
