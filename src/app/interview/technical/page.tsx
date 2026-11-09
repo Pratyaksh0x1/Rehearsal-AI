@@ -9,6 +9,7 @@ import { ConsoleResults } from '@/components/editor/ConsoleResults';
 import { VoicePanel, VoicePanelHandle } from '@/components/voice/VoicePanel';
 import { EvaluationModal } from '@/components/interview/EvaluationModal';
 import { ProctorCamera } from '@/components/interview/ProctorCamera';
+import { InterviewTimer, resetInterviewTimer } from '@/components/interview/InterviewTimer';
 import { ExecutionResult } from '@/lib/judge';
 import { captureEvent } from '@/lib/analytics/posthog';
 import {
@@ -412,6 +413,7 @@ export default function TechnicalRoundPage() {
       if (data.evaluation) {
         setEvaluation(data.evaluation);
         setShowModal(true);
+        resetInterviewTimer('technical');
         const ev = data.evaluation;
         const firstSentences = String(ev.feedback || '').split(/(?<=[.!?])\s+/).slice(0, 2).join(' ');
         const verdict = `Thanks for the session. You scored ${Math.round(Number(ev.score) || 0)} out of 100. ${firstSentences} Your full breakdown is on the screen.`;
@@ -451,15 +453,19 @@ export default function TechnicalRoundPage() {
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleSubmitInterview}
-            disabled={isEvaluating}
-            className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-hover text-accent-foreground font-bold text-sm shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>{isEvaluating ? 'Evaluating Performance...' : 'Submit Interview'}</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <InterviewTimer totalMinutes={45} interviewKey="technical" />
+
+            <button
+              type="button"
+              onClick={handleSubmitInterview}
+              disabled={isEvaluating}
+              className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-hover text-accent-foreground font-bold text-sm shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>{isEvaluating ? 'Evaluating Performance...' : 'Submit Interview'}</span>
+            </button>
+          </div>
         </div>
 
         {/* 2-Column Responsive Workspace Grid */}

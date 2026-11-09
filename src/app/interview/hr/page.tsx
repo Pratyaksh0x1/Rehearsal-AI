@@ -7,6 +7,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { VoicePanel } from '@/components/voice/VoicePanel';
 import { EvaluationModal } from '@/components/interview/EvaluationModal';
 import { ProctorCamera } from '@/components/interview/ProctorCamera';
+import { InterviewTimer, resetInterviewTimer } from '@/components/interview/InterviewTimer';
 import { captureEvent } from '@/lib/analytics/posthog';
 import {
   Users,
@@ -228,6 +229,7 @@ export default function HRRoundPage() {
       if (data.evaluation) {
         setEvaluation(data.evaluation);
         setShowModal(true);
+        resetInterviewTimer('hr');
         captureEvent('hr_evaluation_completed', {
           communicationScore: data.evaluation.communicationScore,
           starStructureScore: data.evaluation.starStructureScore,
@@ -260,6 +262,8 @@ export default function HRRoundPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <InterviewTimer totalMinutes={45} interviewKey="hr" />
+
             <span className="text-xs font-mono font-semibold px-3 py-1 rounded-full bg-bg border border-border text-text-muted">
               Question {Math.min(questionCount, TOTAL_HR_QUESTIONS)} of {TOTAL_HR_QUESTIONS}
             </span>

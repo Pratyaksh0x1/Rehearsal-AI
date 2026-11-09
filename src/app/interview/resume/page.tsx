@@ -7,6 +7,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { VoicePanel } from '@/components/voice/VoicePanel';
 import { EvaluationModal } from '@/components/interview/EvaluationModal';
+import { InterviewTimer, resetInterviewTimer } from '@/components/interview/InterviewTimer';
 import { captureEvent } from '@/lib/analytics/posthog';
 import {
   FileCheck2,
@@ -273,6 +274,9 @@ export default function ResumeReviewPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* 45-Minute Interview Countdown Timer */}
+            <InterviewTimer totalMinutes={45} interviewKey="resume" />
+
             {brainstormData && (
               <button
                 type="button"
