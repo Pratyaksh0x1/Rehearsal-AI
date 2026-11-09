@@ -3,23 +3,73 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { Code2, FileText, MessageSquare, ArrowRight } from 'lucide-react';
 import { captureEvent } from '@/lib/analytics/posthog';
-import { TechnicalRoundSetup } from '@/components/interview/TechnicalRoundSetup';
+import {
+  TechnicalRoundSetup,
+  TechnicalSetupConfig,
+} from '@/components/interview/TechnicalRoundSetup';
+import { BeforeYouStartSection } from '@/components/interview/BeforeYouStartSection';
 
 export default function InterviewHubPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const initialStep = searchParams.get('step') === 'setup' ? 'setup-technical' : 'choose';
-  const [currentStep, setCurrentStep] = useState<'choose' | 'setup-technical'>(initialStep);
+
+  const initialStep =
+    searchParams.get('step') === 'setup'
+      ? 'setup-technical'
+      : searchParams.get('step') === 'before-start'
+      ? 'before-start'
+      : 'choose';
+
+  const [currentStep, setCurrentStep] = useState<'choose' | 'setup-technical' | 'before-start'>(
+    initialStep
+  );
+  const [technicalConfig, setTechnicalConfig] = useState<TechnicalSetupConfig | null>(null);
 
   useEffect(() => {
-    if (searchParams.get('step') === 'setup') {
+    const s = searchParams.get('step');
+    if (s === 'setup') {
       setCurrentStep('setup-technical');
+    } else if (s === 'before-start') {
+      setCurrentStep('before-start');
     }
   }, [searchParams]);
+
+  const handleSetupComplete = (config: TechnicalSetupConfig) => {
+    setTechnicalConfig(config);
+    setCurrentStep('before-start');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleLaunchInterview = () => {
+    const langKeyMap: Record<string, string> = {
+      'C++': 'cpp',
+      'Java': 'java',
+      'Python': 'python',
+      'JavaScript': 'javascript',
+    };
+
+    const difficulty = technicalConfig?.difficulty || 'easy';
+    const company = technicalConfig?.company || 'Any company';
+    const lang = technicalConfig ? langKeyMap[technicalConfig.language] || 'cpp' : 'cpp';
+    const pair = technicalConfig?.pair || 'arjun-tanya';
+    const duration = technicalConfig?.durationMinutes || 20;
+
+    const query = new URLSearchParams({
+      difficulty,
+      company,
+      lang,
+      pair,
+      duration: String(duration),
+      autoStart: 'true',
+    });
+
+    router.push(`/interview/technical?${query.toString()}`);
+  };
 
   const interviewTracks = [
     {
@@ -98,8 +148,16 @@ export default function InterviewHubPage() {
       <Navbar />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
-        {currentStep === 'setup-technical' ? (
-          <TechnicalRoundSetup onBack={() => setCurrentStep('choose')} />
+        {currentStep === 'before-start' ? (
+          <BeforeYouStartSection
+            onBack={() => setCurrentStep('setup-technical')}
+            onStartInterview={handleLaunchInterview}
+          />
+        ) : currentStep === 'setup-technical' ? (
+          <TechnicalRoundSetup
+            onBack={() => setCurrentStep('choose')}
+            onStart={handleSetupComplete}
+          />
         ) : (
           <>
             {/* Step 1 Indicator Header matching screenshot */}

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Navbar } from '@/components/layout/Navbar';
 import { CodeEditor, DEFAULT_STARTER_CODE } from '@/components/editor/CodeEditor';
@@ -11,6 +11,7 @@ import { VoicePanel, VoicePanelHandle } from '@/components/voice/VoicePanel';
 import { EvaluationModal } from '@/components/interview/EvaluationModal';
 import { ProctorCamera } from '@/components/interview/ProctorCamera';
 import { InterviewTimer, resetInterviewTimer } from '@/components/interview/InterviewTimer';
+import { BeforeYouStartSection } from '@/components/interview/BeforeYouStartSection';
 import { ExecutionResult } from '@/lib/judge';
 import { captureEvent } from '@/lib/analytics/posthog';
 import {
@@ -58,12 +59,14 @@ export default function TechnicalRoundPage() {
   const { user } = useAuth();
   const userRank = user?.rank || 'Bronze';
 
+  const router = useRouter();
   const searchParams = useSearchParams();
   const difficultyParam = searchParams.get('difficulty') || '';
   const companyParam = searchParams.get('company') || '';
   const langParam = searchParams.get('lang') || 'python';
   const pairParam = searchParams.get('pair') || '';
   const durationParam = parseInt(searchParams.get('duration') || '0', 10);
+  const autoStartParam = searchParams.get('autoStart') === 'true';
 
   const initialDuration =
     durationParam > 0
@@ -106,8 +109,12 @@ export default function TechnicalRoundPage() {
 
   // Interview script state: lobby -> intro (welcome + problem briefing) -> live (discussion) 
   const voiceRef = useRef<VoicePanelHandle>(null);
-  const [phase, setPhase] = useState<'lobby' | 'intro' | 'live'>('lobby');
-  const phaseRef = useRef<'lobby' | 'intro' | 'live'>('lobby');
+  const [phase, setPhase] = useState<'lobby' | 'intro' | 'live'>(
+    autoStartParam ? 'intro' : 'lobby'
+  );
+  const phaseRef = useRef<'lobby' | 'intro' | 'live'>(
+    autoStartParam ? 'intro' : 'lobby'
+  );
   const complexityAskedRef = useRef(false);
   const submitNudgedRef = useRef(false);
   const problemRef = useRef<Problem | null>(null);
@@ -240,9 +247,9 @@ export default function TechnicalRoundPage() {
     return `Your problem today is called ${p.title}, a ${String(p.difficulty || 'medium').toLowerCase()} level problem. ${desc}${exText}${cons}`;
   };
 
-  // Called when the candidate presses "Start voice interview": welcome -> how it works -> the problem -> hand over
+  // Called when the candidate starts the interview: welcome -> how it works -> the problem -> hand over
   const startInterview = async () => {
-    if (phaseRef.current !== 'lobby') return;
+    if (phaseRef.current === 'live') return;
     phaseRef.current = 'intro';
     setPhase('intro');
     const iv = interviewerRef.current;
@@ -267,6 +274,16 @@ export default function TechnicalRoundPage() {
     lastActiveTimeRef.current = Date.now();
     hasNudgedRef.current = false;
   };
+
+  // Automatically start voice introduction if launched directly from Step 3
+  useEffect(() => {
+    if (autoStartParam) {
+      const timer = setTimeout(() => {
+        void startInterview();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoStartParam]);
 
   // Handle user speech or text message to the AI interviewer
   const handleUserMessage = async (
@@ -476,6 +493,26 @@ export default function TechnicalRoundPage() {
   const visibleTestCases = problem?.test_cases?.filter((t) => !t.is_hidden) || [];
   const hiddenTestCases = problem?.test_cases?.filter((t) => t.is_hidden) || [];
 
+  if (phase === 'lobby') {
+    return (
+      <div className="min-h-screen bg-bg dark:bg-[#0a0818] text-text-primary flex flex-col transition-colors selection:bg-purple-500/30">
+        <Navbar />
+        <main className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full flex flex-col items-center justify-center">
+          <BeforeYouStartSection
+            onBack={() => router.push('/interview')}
+            onStartInterview={() => {
+              phaseRef.current = 'intro';
+              setPhase('intro');
+              setTimeout(() => {
+                void startInterview();
+              }, 250);
+            }}
+          />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-bg text-text-primary flex flex-col transition-colors">
       <Navbar />
@@ -604,6 +641,7 @@ export default function TechnicalRoundPage() {
               {/* Live Voice & Audio Controls (Strict No-Barge-In with Automatic Voice Activity Detection) */}
               <VoicePanel
                 ref={voiceRef}
+                autoStart={phase === 'intro'}
                 onStart={startInterview}
                 onSendMessage={handleUserMessage}
                 isProcessing={isChatLoading}

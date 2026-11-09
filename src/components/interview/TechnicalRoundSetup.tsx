@@ -371,7 +371,7 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
               onClick={handleStartInterview}
               className="w-full sm:w-auto px-8 py-3.5 rounded-full font-bold text-slate-950 text-sm sm:text-base bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-300 hover:to-orange-400 shadow-xl hover:shadow-amber-500/25 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer group active:scale-95"
             >
-              <span>Start interview</span>
+              <span>Continue</span>
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </button>
           </div>
@@ -380,3 +380,4 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
     </div>
   );
 }
+

@@ -34,6 +34,8 @@ export interface VoicePanelHandle {
   stopSpeaking: () => void;
   /** true while the agent is speaking/thinking or the candidate is mid-sentence */
   isBusy: () => boolean;
+  /** Programmatically start voice interview session */
+  start?: () => Promise<void>;
 }
 
 export interface VoiceMessageOptions {
@@ -56,6 +58,8 @@ interface VoicePanelProps {
   onStart?: () => void | Promise<void>;
   /** Used when onStart is not provided: spoken once when the candidate presses start. */
   initialMessage?: string;
+  /** Automatically trigger start on mount after explicit user gesture in pre-interview step */
+  autoStart?: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -870,12 +874,19 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
     };
   }, [stopMic, stopPlayback]);
 
+  useEffect(() => {
+    if (props.autoStart && !started) {
+      void handleStart();
+    }
+  }, [props.autoStart]);
+
   useImperativeHandle(
     ref,
     () => ({
       speak,
       stopSpeaking: stopPlayback,
       isBusy: () => isAgentSpeakingRef.current || busyRef.current || segRef.current.active,
+      start: handleStart,
     }),
     [speak, stopPlayback]
   );
