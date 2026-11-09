@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { AIPanelsSection } from '@/components/shared/AIPanelsSection';
+import { HomePanelLeaderboardSection } from '@/components/home/HomePanelLeaderboardSection';
 import { ReviewsSection } from '@/components/shared/ReviewsSection';
 import { Footer } from '@/components/layout/Footer';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
@@ -206,8 +206,8 @@ function LandingPageContent() {
           <DeviceMockupAnimation />
         </section>
 
-        {/* 3. AI Panels Section */}
-        <AIPanelsSection />
+        {/* 3. Meet Your Panel & Leaderboard Section */}
+        <HomePanelLeaderboardSection userPoints={100} userName="You" />
 
         {/* 4. Reviews Section */}
         <ReviewsSection />

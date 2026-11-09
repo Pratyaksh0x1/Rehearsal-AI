@@ -10,18 +10,74 @@ export interface AIPanelist {
   avatarUrl: string;
   bio: string;
   personality: string;
+  mode?: 'Warm-up' | 'Real round';
+  tagline?: string;
 }
 
 /**
- * 8 interviewer personas. Persona name/avatar/personality are ours; the spoken voice is a REAL voice from
- * Gnani's Timbre v2.5 catalog (docs.gnani.ai/api/TTS/available-voices).
- *
- * IMPORTANT: Gnani no longer accepts model 'timbre-v2.0', and Shubhra / Arjun / Meera / Rohan are NOT voices in
- * the catalog - sending them returned HTTP 400 and the app silently fell back to no audio. English v2.5 voices:
- * Kaveri, Trupti, Devika (female) and Pranav, Shlok, Girish (male). For more variety switch a persona to
- * model 'timbre-v3.0' with a v3.0 voice (Shivani, Avinash, ...), if your key has access.
+ * Interviewer personas with authentic studio portraits and verified Gnani voices.
  */
 export const AI_PANELISTS: AIPanelist[] = [
+  {
+    id: 'arjun',
+    name: 'Arjun',
+    voice: 'Girish', // valid Timbre v2.5 English voice
+    model: 'timbre-v2.5',
+    voiceId: 'Girish',
+    role: 'Staff Algorithms Coach',
+    category: 'technical',
+    specialty: 'Data Structures, Binary Search & Optimization',
+    avatarUrl: '/avatars/arjun.jpg',
+    bio: 'Dynamic interviewer challenging you to eliminate redundant work and write clean optimal solutions.',
+    personality: 'Friendly and patient. A good first interview.',
+    mode: 'Warm-up',
+    tagline: 'Friendly and patient. A good first interview.',
+  },
+  {
+    id: 'tanya',
+    name: 'Tanya',
+    voice: 'Kaveri', // valid Timbre v2.5 English voice
+    model: 'timbre-v2.5',
+    voiceId: 'Kaveri',
+    role: 'Algorithms Specialist & Mentor',
+    category: 'technical',
+    specialty: 'Brute Force to Optimal Transitions, Arrays & Strings',
+    avatarUrl: '/avatars/tanya.jpg',
+    bio: 'Supportive mentor helping candidates build confidence with structured problem decomposition.',
+    personality: 'Patient and encouraging, offers gentle hints when you stall.',
+    mode: 'Warm-up',
+    tagline: 'Brute force is fine to start. Hints when you stall.',
+  },
+  {
+    id: 'samarth',
+    name: 'Samarth',
+    voice: 'Pranav', // valid Timbre v2.5 English voice
+    model: 'timbre-v2.5',
+    voiceId: 'Pranav',
+    role: 'Senior Staff Systems Architect',
+    category: 'technical',
+    specialty: 'Distributed Systems, High Concurrency & Production Trade-offs',
+    avatarUrl: '/avatars/samarth.jpg',
+    bio: 'Realistic company interviewer evaluating production readiness, memory footprint, and exact metrics.',
+    personality: 'Methodical and precise. Wants concrete specifics, not claims.',
+    mode: 'Real round',
+    tagline: 'A real company round. Wants specifics, not claims.',
+  },
+  {
+    id: 'riddhi',
+    name: 'Riddhi',
+    voice: 'Trupti', // valid Timbre v2.5 English voice
+    model: 'timbre-v2.5',
+    voiceId: 'Trupti',
+    role: 'Lead Backend Engineer & Evaluator',
+    category: 'technical',
+    specialty: 'Graph Algorithms, Scale Dynamics & Failure Modes',
+    avatarUrl: '/avatars/riddhi.jpg',
+    bio: 'In-depth tech round evaluator probing edge cases, failure recovery, and architectural durability.',
+    personality: 'Thorough and discerning. Tests edge cases and scale.',
+    mode: 'Real round',
+    tagline: 'Rigorous technical probe. Tests edge cases and scale.',
+  },
   {
     id: 'pranav',
     name: 'Pranav',
@@ -34,6 +90,8 @@ export const AI_PANELISTS: AIPanelist[] = [
     avatarUrl: '/avatars/pranav.jpg',
     bio: 'Bold, grounded interviewer testing your architectural intuition, memory barriers, and edge cases.',
     personality: 'Rigorous and direct, values clean modular code and precise Big-O reasoning.',
+    mode: 'Real round',
+    tagline: 'A real company round. Tests concurrency and architectural intuition.',
   },
   {
     id: 'kaveri',
