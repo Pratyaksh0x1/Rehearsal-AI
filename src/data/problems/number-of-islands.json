@@ -1,0 +1,76 @@
+{
+  "title": "Number of Islands",
+  "slug": "number-of-islands",
+  "difficulty": "medium",
+  "category": "graphs",
+  "rank_tier": "Platinum",
+  "company_tags": [
+    "Amazon",
+    "Google",
+    "Meta",
+    "Microsoft",
+    "Bloomberg",
+    "Netflix",
+    "Uber"
+  ],
+  "description": "Given an `m x n` 2D binary grid `grid` which represents a map of `'1'`s (land) and `'0'`s (water), return the number of islands.\n\nAn **island** is surrounded by water and is formed by connecting adjacent lands horizontally or vertically. You may assume all four edges of the grid are all surrounded by water.",
+  "examples": [
+    {
+      "input": "grid = [[\"1\",\"1\",\"1\",\"1\",\"0\"],[\"1\",\"1\",\"0\",\"1\",\"0\"],[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"0\",\"0\",\"0\",\"0\",\"0\"]",
+      "output": "1",
+      "explanation": "All connected 1s form a single contiguous landmass."
+    },
+    {
+      "input": "grid = [[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"0\",\"0\",\"1\",\"0\",\"0\"],[\"0\",\"0\",\"0\",\"1\",\"1\"]",
+      "output": "3",
+      "explanation": "There are 3 distinct islands."
+    }
+  ],
+  "constraints": [
+    "m == grid.length",
+    "n == grid[i].length",
+    "1 <= m, n <= 300",
+    "grid[i][j] is '0' or '1'."
+  ],
+  "starter_code": {
+    "python": "class Solution:\n    def numIslands(self, grid: list[list[str]]) -> int:\n        pass\n",
+    "javascript": "/**\n * @param {character[][]} grid\n * @return {number}\n */\nfunction numIslands(grid) {\n    \n}\n",
+    "cpp": "#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    int numIslands(vector<vector<char>>& grid) {\n        \n    }\n};\n",
+    "java": "class Solution {\n    public int numIslands(char[][] grid) {\n        return 0;\n    }\n}\n"
+  },
+  "test_cases": [
+    {
+      "input": "[[\"1\",\"1\",\"1\",\"1\",\"0\"],[\"1\",\"1\",\"0\",\"1\",\"0\"],[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"0\",\"0\",\"0\",\"0\",\"0\"]",
+      "expected_output": "1",
+      "is_hidden": false
+    },
+    {
+      "input": "[[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"0\",\"0\",\"1\",\"0\",\"0\"],[\"0\",\"0\",\"0\",\"1\",\"1\"]",
+      "expected_output": "3",
+      "is_hidden": false
+    },
+    {
+      "input": "[[\"1\"]]",
+      "expected_output": "1",
+      "is_hidden": false
+    },
+    {
+      "input": "[[\"0\"]]",
+      "expected_output": "0",
+      "is_hidden": true
+    },
+    {
+      "input": "[[\"1\",\"0\",\"1\",\"0\",\"1\"]]",
+      "expected_output": "3",
+      "is_hidden": true
+    }
+  ],
+  "hints": [
+    "Iterate through each cell; when you find an unvisited '1', trigger a BFS or DFS traversal to sink or mark all connected land cells.",
+    "Increment your island counter for each distinct BFS/DFS traversal initiated."
+  ],
+  "optimal_complexity": {
+    "time": "O(m * n)",
+    "space": "O(m * n)"
+  }
+}

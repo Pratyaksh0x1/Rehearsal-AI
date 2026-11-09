@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Navbar } from '@/components/layout/Navbar';
 import { CodeEditor, DEFAULT_STARTER_CODE } from '@/components/editor/CodeEditor';
@@ -24,7 +25,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import Image from 'next/image';
-import { AI_PANELISTS, getRandomAgent, AIPanelist } from '@/config/panels';
+import { AI_PANELISTS, getRandomAgent, getAgentForPair, AIPanelist } from '@/config/panels';
 
 interface TestCase {
   input: string;
@@ -57,15 +58,38 @@ export default function TechnicalRoundPage() {
   const { user } = useAuth();
   const userRank = user?.rank || 'Bronze';
 
+  const searchParams = useSearchParams();
+  const difficultyParam = searchParams.get('difficulty') || '';
+  const companyParam = searchParams.get('company') || '';
+  const langParam = searchParams.get('lang') || 'python';
+  const pairParam = searchParams.get('pair') || '';
+  const durationParam = parseInt(searchParams.get('duration') || '0', 10);
+
+  const initialDuration =
+    durationParam > 0
+      ? durationParam
+      : difficultyParam === 'easy'
+      ? 20
+      : difficultyParam === 'medium'
+      ? 25
+      : difficultyParam === 'hard'
+      ? 30
+      : 45;
+
   const [problem, setProblem] = useState<Problem | null>(null);
-  const [language, setLanguage] = useState('python');
-  const [code, setCode] = useState(DEFAULT_STARTER_CODE.python);
+  const [language, setLanguage] = useState(langParam || 'python');
+  const [code, setCode] = useState(
+    (DEFAULT_STARTER_CODE as any)[langParam] || DEFAULT_STARTER_CODE.python
+  );
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [showFullProblem, setShowFullProblem] = useState(true);
 
-  // Random technical interviewer picked per session from 8-agent Gnani catalog
-  const [interviewer, setInterviewer] = useState<AIPanelist>(AI_PANELISTS[0]);
+  // Pick interviewer based on selected pair or random technical agent
+  const [interviewer, setInterviewer] = useState<AIPanelist>(() => {
+    if (pairParam) return getAgentForPair(pairParam);
+    return getRandomAgent('technical');
+  });
 
   // Chat conversation state. messagesRef is the source of truth so async voice callbacks never see stale history.
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -103,29 +127,46 @@ export default function TechnicalRoundPage() {
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    // Pick a random technical voice agent on mount
-    setInterviewer(getRandomAgent('technical'));
-  }, []);
+    if (pairParam) {
+      setInterviewer(getAgentForPair(pairParam));
+    } else {
+      setInterviewer(getRandomAgent('technical'));
+    }
+  }, [pairParam]);
 
   useEffect(() => {
     async function fetchProblem() {
       try {
         const userParam = user?.id ? `&userId=${encodeURIComponent(user.id)}` : '';
-        const res = await fetch(`/api/problems?tier=${encodeURIComponent(userRank)}&mode=next${userParam}`);
+        const diffParam = difficultyParam ? `&difficulty=${encodeURIComponent(difficultyParam)}` : '';
+        const compParam =
+          companyParam && companyParam !== 'Any company'
+            ? `&company=${encodeURIComponent(companyParam)}`
+            : '';
+
+        const res = await fetch(
+          `/api/problems?tier=${encodeURIComponent(userRank)}&mode=next${userParam}${diffParam}${compParam}`
+        );
         if (res.ok) {
           const data = await res.json();
           const selected: Problem = data.problem || (data.problems && data.problems[0]);
           if (selected) {
             setProblem(selected);
 
-            // Populate initial starter code if available for Python
-            if (selected.starter_code && selected.starter_code.python) {
-              setCode(selected.starter_code.python);
+            // Populate initial starter code for selected language
+            const targetLang = langParam || language || 'python';
+            if (selected.starter_code && (selected.starter_code as any)[targetLang]) {
+              setCode((selected.starter_code as any)[targetLang]);
+            } else if ((DEFAULT_STARTER_CODE as any)[targetLang]) {
+              setCode((DEFAULT_STARTER_CODE as any)[targetLang]);
             }
 
             captureEvent('technical_round_started', {
               problemTitle: selected.title,
               rankTier: userRank,
+              difficulty: difficultyParam || selected.difficulty,
+              company: companyParam || 'Any company',
+              language: targetLang,
               isRepeat: Boolean(data.isRepeat),
               remainingUnattempted: data.remainingUnattempted ?? 0,
             });
@@ -136,7 +177,7 @@ export default function TechnicalRoundPage() {
       }
     }
     fetchProblem();
-  }, [userRank, user?.id]);
+  }, [userRank, user?.id, difficultyParam, companyParam, langParam]);
 
   // Handle switching code editor language
   const handleLanguageChange = (newLang: string) => {
@@ -414,6 +455,7 @@ export default function TechnicalRoundPage() {
         setEvaluation(data.evaluation);
         setShowModal(true);
         resetInterviewTimer('technical');
+        resetInterviewTimer(`technical_${difficultyParam || 'standard'}`);
         const ev = data.evaluation;
         const firstSentences = String(ev.feedback || '').split(/(?<=[.!?])\s+/).slice(0, 2).join(' ');
         const verdict = `Thanks for the session. You scored ${Math.round(Number(ev.score) || 0)} out of 100. ${firstSentences} Your full breakdown is on the screen.`;
@@ -441,10 +483,21 @@ export default function TechnicalRoundPage() {
       <main className="flex-1 max-w-[1680px] w-full mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
         {/* Top Header Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 bg-surface border border-border rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <span className="text-xs font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded bg-accent-subtle text-accent border border-accent/20">
-              Technical Coding Round
+              Technical Round
             </span>
+            {difficultyParam && (
+              <span className="text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                {difficultyParam} · {initialDuration}m
+              </span>
+            )}
+            {companyParam && companyParam !== 'Any company' && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/30 flex items-center gap-1.5">
+                <span>🏢</span>
+                <span>{companyParam}</span>
+              </span>
+            )}
             <span className="text-sm font-semibold text-text-muted">
               Tier: <strong className="text-text-primary">{userRank}</strong>
             </span>
@@ -454,7 +507,10 @@ export default function TechnicalRoundPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <InterviewTimer totalMinutes={45} interviewKey="technical" />
+            <InterviewTimer
+              totalMinutes={initialDuration}
+              interviewKey={`technical_${difficultyParam || 'standard'}`}
+            />
 
             <button
               type="button"

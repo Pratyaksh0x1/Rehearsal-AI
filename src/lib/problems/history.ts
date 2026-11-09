@@ -20,6 +20,7 @@ export interface Problem {
   difficulty: string;
   topics: string[];
   rankTier: string;
+  company_tags?: string[];
   description?: string;
   examples?: Array<{ input: string; output: string; explanation?: string }>;
   constraints?: string[];
@@ -42,7 +43,7 @@ export function enrichProblemWithDetails(p: Problem): Problem {
       const directPath = path.join(PROBLEMS_DIR, `${p.externalId}.json`);
       if (fs.existsSync(directPath)) {
         const data = JSON.parse(fs.readFileSync(directPath, 'utf-8'));
-        return { ...p, ...data };
+        return { ...p, ...data, company_tags: data.company_tags || p.company_tags };
       }
 
       // 2. Search by title slug
@@ -52,7 +53,7 @@ export function enrichProblemWithDetails(p: Problem): Problem {
         if (file.includes(slugName) || file.includes(p.externalId.toLowerCase())) {
           const fullPath = path.join(PROBLEMS_DIR, file);
           const data = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
-          return { ...p, ...data };
+          return { ...p, ...data, company_tags: data.company_tags || p.company_tags };
         }
       }
     }
@@ -61,6 +62,15 @@ export function enrichProblemWithDetails(p: Problem): Problem {
   }
 
   // Fallback defaults for standard LeetCode problems
+  const localMatch = (localProblems as any[]).find(
+    (lp) =>
+      lp.id === p.id ||
+      lp.externalId === p.externalId ||
+      lp.title?.toLowerCase() === p.title?.toLowerCase()
+  );
+  const resolvedCompanyTags =
+    p.company_tags || localMatch?.company_tags || ['Google', 'Meta', 'Amazon'];
+
   const fallbackTestCases: TestCase[] = [
     { input: '[2, 7, 11, 15], 9', expected_output: '[0, 1]', is_hidden: false },
     { input: '[3, 2, 4], 6', expected_output: '[1, 2]', is_hidden: false },
@@ -71,6 +81,7 @@ export function enrichProblemWithDetails(p: Problem): Problem {
 
   return {
     ...p,
+    company_tags: resolvedCompanyTags,
     description:
       p.description ||
       `Given an array of integers \`nums\` and an integer \`target\`, return **indices of the two numbers** such that they add up to \`target\`.
@@ -308,11 +319,47 @@ export async function getAllProblems(): Promise<Problem[]> {
 export async function getNextProblemForCandidate(options: {
   userId?: string | null;
   rankTier?: string | null;
+  difficulty?: string | null;
+  company?: string | null;
 }): Promise<NextProblemResult> {
-  const rankTier = normalizeTier(options.rankTier);
-  const tierProblems = await getProblemsByTier(rankTier);
+  const allProblems = await getAllProblems();
+  let candidatePool = [...allProblems];
 
-  if (!tierProblems || tierProblems.length === 0) {
+  // 1. Filter by difficulty if provided (e.g. 'easy', 'medium', 'hard')
+  if (options.difficulty && options.difficulty.toLowerCase() !== 'all') {
+    const diff = options.difficulty.toLowerCase().trim();
+    const diffFiltered = candidatePool.filter((p) => {
+      const d = (p.difficulty || '').toLowerCase();
+      if (diff === 'easy') return d === 'easy' || d === '800';
+      if (diff === 'medium') return d === 'medium' || d === '1100' || d === '1200';
+      if (diff === 'hard') return d === 'hard' || d === '1300';
+      return d === diff;
+    });
+    if (diffFiltered.length > 0) {
+      candidatePool = diffFiltered;
+    }
+  }
+
+  // 2. Filter by company if provided (e.g. 'Google', 'Meta', 'Amazon', etc.)
+  if (options.company && options.company !== 'Any company') {
+    const compLower = options.company.toLowerCase().trim();
+    const companyFiltered = candidatePool.filter((p) => {
+      return (p.company_tags || []).some(
+        (tag) => tag.toLowerCase() === compLower || tag.toLowerCase().includes(compLower)
+      );
+    });
+    if (companyFiltered.length > 0) {
+      candidatePool = companyFiltered;
+    }
+  }
+
+  // 3. Fallback to rank tier if no options or pool is empty
+  if (!candidatePool || candidatePool.length === 0) {
+    const rankTier = normalizeTier(options.rankTier);
+    candidatePool = await getProblemsByTier(rankTier);
+  }
+
+  if (!candidatePool || candidatePool.length === 0) {
     // Ultimate fallback if no problems exist in tier
     const fallbackProblem: Problem = {
       id: 'lc-1',
@@ -323,6 +370,7 @@ export async function getNextProblemForCandidate(options: {
       difficulty: 'Easy',
       topics: ['Arrays', 'Hashing'],
       rankTier: 'Bronze',
+      company_tags: ['Google', 'Meta', 'Amazon', 'Apple', 'Microsoft'],
     };
     return {
       problem: enrichProblemWithDetails(fallbackProblem),
@@ -333,14 +381,14 @@ export async function getNextProblemForCandidate(options: {
     };
   }
 
-  // If no user ID is provided (e.g. unauthenticated demo), pick random from tier
+  // If no user ID is provided (e.g. unauthenticated demo), pick random from pool
   if (!options.userId) {
-    const randomIndex = Math.floor(Math.random() * tierProblems.length);
+    const randomIndex = Math.floor(Math.random() * candidatePool.length);
     return {
-      problem: enrichProblemWithDetails(tierProblems[randomIndex]),
+      problem: enrichProblemWithDetails(candidatePool[randomIndex]),
       isRepeat: false,
-      remainingUnattempted: tierProblems.length,
-      totalInTier: tierProblems.length,
+      remainingUnattempted: candidatePool.length,
+      totalInTier: candidatePool.length,
       attemptCountForUser: 0,
     };
   }
@@ -348,14 +396,13 @@ export async function getNextProblemForCandidate(options: {
   // Retrieve this specific user's attempt history
   const attemptedIds = await getCandidateAttemptedIds(options.userId);
 
-  // Filter for problems in this tier that THIS candidate has NOT yet attempted
-  const unattemptedProblems = tierProblems.filter(
+  // Filter for problems in this pool that THIS candidate has NOT yet attempted
+  const unattemptedProblems = candidatePool.filter(
     (p) => !attemptedIds.has(String(p.externalId))
   );
 
-  // CASE 1: Candidate has fresh, unattempted problems in their rank tier
+  // CASE 1: Candidate has fresh, unattempted problems in their selected pool
   if (unattemptedProblems.length > 0) {
-    // Pick randomly from the unattempted pool to ensure varied interview sessions
     const randomIndex = Math.floor(Math.random() * unattemptedProblems.length);
     const selected = unattemptedProblems[randomIndex];
 
@@ -363,16 +410,15 @@ export async function getNextProblemForCandidate(options: {
       problem: enrichProblemWithDetails(selected),
       isRepeat: false,
       remainingUnattempted: unattemptedProblems.length - 1,
-      totalInTier: tierProblems.length,
+      totalInTier: candidatePool.length,
       attemptCountForUser: attemptedIds.size,
     };
   }
 
-  // CASE 2: Candidate has already attempted all problems in their rank tier!
-  // Instead of failing, pick the problem they attempted the longest time ago (least recently seen)
+  // CASE 2: Candidate has already attempted all problems in their selected pool!
+  // Pick the problem they attempted the longest time ago (least recently seen)
   try {
     const userHistory = await getCandidateProblemHistory(options.userId, 100);
-    // Find the problem in this tier with the earliest or missing recent attempt
     const lastAttemptTimeMap = new Map<string, number>();
     for (const h of userHistory) {
       const time = new Date(h.createdAt).getTime();
@@ -381,30 +427,28 @@ export async function getNextProblemForCandidate(options: {
       }
     }
 
-    // Sort tier problems by oldest attempt time
-    const sortedByOldest = [...tierProblems].sort((a, b) => {
+    const sortedByOldest = [...candidatePool].sort((a, b) => {
       const timeA = lastAttemptTimeMap.get(String(a.externalId)) || 0;
       const timeB = lastAttemptTimeMap.get(String(b.externalId)) || 0;
       return timeA - timeB;
     });
 
-    const recycledProblem = sortedByOldest[0] || tierProblems[0];
+    const recycledProblem = sortedByOldest[0] || candidatePool[0];
 
     return {
       problem: enrichProblemWithDetails(recycledProblem),
       isRepeat: true,
       remainingUnattempted: 0,
-      totalInTier: tierProblems.length,
+      totalInTier: candidatePool.length,
       attemptCountForUser: attemptedIds.size,
     };
   } catch (err) {
-    // Safe fallback: pick random from tier
-    const randomIndex = Math.floor(Math.random() * tierProblems.length);
+    const randomIndex = Math.floor(Math.random() * candidatePool.length);
     return {
-      problem: enrichProblemWithDetails(tierProblems[randomIndex]),
+      problem: enrichProblemWithDetails(candidatePool[randomIndex]),
       isRepeat: true,
       remainingUnattempted: 0,
-      totalInTier: tierProblems.length,
+      totalInTier: candidatePool.length,
       attemptCountForUser: attemptedIds.size,
     };
   }

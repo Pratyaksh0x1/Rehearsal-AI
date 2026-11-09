@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const tier = searchParams.get('tier') || 'Bronze';
     const mode = searchParams.get('mode'); // 'next' | 'history' | 'stats' | null
+    const difficulty = searchParams.get('difficulty');
+    const company = searchParams.get('company');
     let userId = searchParams.get('userId');
 
     // If userId not provided in query param, attempt to resolve from Supabase session
@@ -37,6 +39,8 @@ export async function GET(req: NextRequest) {
       const nextResult = await getNextProblemForCandidate({
         userId,
         rankTier: tier,
+        difficulty,
+        company,
       });
       return NextResponse.json(nextResult);
     }

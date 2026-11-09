@@ -146,17 +146,34 @@ export const AI_PANELISTS: AIPanelist[] = [
     personality: 'Analytical and laser-focused on quantifiable engineering results.',
   },
   {
-    id: 'arjun',
-    name: 'Arjun',
-    voice: 'Girish', // valid Timbre v2.5 English voice
+    id: 'vivan',
+    name: 'Vivan',
+    voice: 'Pranav', // valid Timbre v2.5 English voice
     model: 'timbre-v2.5',
-    voiceId: 'Girish',
-    role: 'Competitive Programming Master',
+    voiceId: 'Pranav',
+    role: 'Principal Systems Architect',
     category: 'technical',
-    specialty: 'Data Structures, Binary Search & Monotonic Stacks',
-    avatarUrl: '/avatars/arjun.jpg',
-    bio: 'Dynamic interviewer challenging you to eliminate redundant work and write clean optimal solutions.',
-    personality: 'Energetic and sharp, offers micro-hints only when candidates hit conceptual walls.',
+    specialty: 'High-Scale Concurrency, Graph Theory & Micro-Optimizations',
+    avatarUrl: '/avatars/vivan.jpg',
+    bio: 'Principal engineer evaluating deep algorithmic mastery, memory safety, and high-throughput trade-offs.',
+    personality: 'Rigorous and discerning. Probes scale limits, edge conditions, and complexity lower-bounds.',
+    mode: 'Real round',
+    tagline: 'Principal engineering probe. Demands optimal complexity and scale.',
+  },
+  {
+    id: 'shreya',
+    name: 'Shreya',
+    voice: 'Trupti', // valid Timbre v2.5 English voice
+    model: 'timbre-v2.5',
+    voiceId: 'Trupti',
+    role: 'Principal Infrastructure Engineer',
+    category: 'technical',
+    specialty: 'Distributed Algorithms, Dynamic Programming & Fault Tolerance',
+    avatarUrl: '/avatars/shreya.jpg',
+    bio: 'Principal tech lead testing multi-faceted system trade-offs and robust edge case proofs.',
+    personality: 'Sharp, inquisitive, and challenges candidates to rigorously prove their invariants.',
+    mode: 'Real round',
+    tagline: 'Principal-level probe. Tests invariants, memory barriers, and proof of optimality.',
   },
   {
     id: 'meera',
@@ -205,4 +222,25 @@ export function getRandomAgent(category?: 'technical' | 'hr' | 'resume'): AIPane
 export function getRandomAgents(count: number = 3): AIPanelist[] {
   const shuffled = [...AI_PANELISTS].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, count);
+}
+
+/**
+ * Returns an agent by ID, or fallback.
+ */
+export function getAgentById(id: string): AIPanelist | undefined {
+  return AI_PANELISTS.find((p) => p.id.toLowerCase() === id.toLowerCase());
+}
+
+/**
+ * Returns an agent from a chosen interviewer pair (e.g. 'arjun-tanya', 'samarth-riddhi', 'vivan-shreya').
+ */
+export function getAgentForPair(pair: 'arjun-tanya' | 'samarth-riddhi' | 'vivan-shreya' | string): AIPanelist {
+  let candidateIds: string[] = [];
+  if (pair === 'arjun-tanya') candidateIds = ['arjun', 'tanya'];
+  else if (pair === 'samarth-riddhi') candidateIds = ['samarth', 'riddhi'];
+  else if (pair === 'vivan-shreya') candidateIds = ['vivan', 'shreya'];
+  else candidateIds = ['arjun', 'tanya'];
+
+  const pickedId = candidateIds[Math.floor(Math.random() * candidateIds.length)];
+  return getAgentById(pickedId) || AI_PANELISTS[0];
 }
