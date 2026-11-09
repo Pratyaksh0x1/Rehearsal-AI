@@ -43,6 +43,9 @@ export function OnboardingFlow() {
       hasResume: Boolean(candidateFile),
     });
 
+    let parsedResumeText = user?.resumeText || '';
+    let parsedResumeUrl = user?.resumeUrl || '';
+
     // Start background resume parsing & evaluation
     if (candidateFile) {
       try {
@@ -56,18 +59,20 @@ export function OnboardingFlow() {
 
         if (res.ok) {
           const data = await res.json();
-          setResumeText(data.resumeText || '');
-          setResumeUrl(data.resumeUrl || '');
+          if (data.resumeText) parsedResumeText = data.resumeText;
+          if (data.resumeUrl) parsedResumeUrl = data.resumeUrl;
+          setResumeText(parsedResumeText);
+          setResumeUrl(parsedResumeUrl);
 
           // Run ATS evaluation
-          if (data.resumeText) {
+          if (parsedResumeText) {
             try {
               const evalRes = await fetch('/api/interviews/evaluate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   type: 'Resume Review',
-                  resumeText: data.resumeText,
+                  resumeText: parsedResumeText,
                 }),
               });
 
@@ -88,16 +93,18 @@ export function OnboardingFlow() {
       }
     }
 
-    // Save profile to database in background
+    // Save profile to database - only pass non-empty resume data, never overwrite with empty strings
     try {
+      const onboardPayload: Record<string, any> = {
+        username: candidateName.trim(),
+      };
+      if (parsedResumeUrl) onboardPayload.resumeUrl = parsedResumeUrl;
+      if (parsedResumeText) onboardPayload.resumeText = parsedResumeText;
+
       await fetch('/api/user/onboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: candidateName.trim(),
-          resumeUrl: '',
-          resumeText: '',
-        }),
+        body: JSON.stringify(onboardPayload),
       });
 
       updateUser({
@@ -105,6 +112,8 @@ export function OnboardingFlow() {
         rank: 'Bronze',
         points: 100,
         isOnboarded: true,
+        resumeText: parsedResumeText || user?.resumeText,
+        resumeUrl: parsedResumeUrl || user?.resumeUrl,
       });
 
       identifyUser(user?.id || candidateName.trim(), {
@@ -144,6 +153,7 @@ export function OnboardingFlow() {
       {step === 'intro' && (
         <IntroGuideSection
           initialName={username}
+          initialHasResume={Boolean(user?.resumeUrl || user?.resumeText)}
           onBegin={handleBegin}
         />
       )}

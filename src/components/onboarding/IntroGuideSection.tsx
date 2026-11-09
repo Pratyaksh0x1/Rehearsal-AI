@@ -6,11 +6,13 @@ import { User, FileText, CheckCircle2, AlertCircle, ArrowRight, Upload } from 'l
 
 interface IntroGuideSectionProps {
   initialName?: string;
+  initialHasResume?: boolean;
   onBegin: (name: string, file: File | null) => void;
 }
 
 export function IntroGuideSection({
   initialName = '',
+  initialHasResume = false,
   onBegin,
 }: IntroGuideSectionProps) {
   const [name, setName] = useState(initialName || '');
@@ -139,6 +141,11 @@ export function IntroGuideSection({
                     <span className="truncate flex items-center gap-1.5 text-amber-300 font-semibold">
                       <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-400" />
                       <span className="truncate">{file.name}</span>
+                    </span>
+                  ) : initialHasResume ? (
+                    <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                      <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 text-emerald-400" />
+                      <span>Resume on file (click to replace)</span>
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5 text-amber-200/60">

@@ -64,9 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             technicalPoints: data.user.technicalPoints ?? data.user.points ?? 0,
             hrRank: data.user.hrRank || 'Bronze',
             hrPoints: data.user.hrPoints ?? 0,
-            isOnboarded: Boolean(data.user.username && data.user.resumeText),
-            resumeText: data.user.resumeText,
-            resumeUrl: data.user.resumeUrl,
+            isOnboarded: Boolean(data.user.username),
+            resumeText: data.user.resumeText || null,
+            resumeUrl: data.user.resumeUrl || null,
           });
           return;
         }

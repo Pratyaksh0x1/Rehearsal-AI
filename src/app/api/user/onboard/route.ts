@@ -51,7 +51,41 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      let finalResumeUrl: string | null = null;
+      let finalResumeText: string | null = null;
+
       if (userEmail) {
+        // Fetch existing user to preserve previously saved resume
+        const existingUserByEmail = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, userEmail))
+          .limit(1);
+
+        const existingRecord = existingUserByEmail[0];
+
+        // Only overwrite resume fields if a new, non-empty value was explicitly provided
+        finalResumeUrl =
+          typeof resumeUrl === 'string' && resumeUrl.trim()
+            ? resumeUrl.trim()
+            : existingRecord?.resumeUrl || null;
+
+        finalResumeText =
+          typeof resumeText === 'string' && resumeText.trim()
+            ? resumeText.trim()
+            : existingRecord?.resumeText || null;
+
+        const updateSet: Record<string, any> = {
+          username: trimmed,
+        };
+
+        if (finalResumeUrl) {
+          updateSet.resumeUrl = finalResumeUrl;
+        }
+        if (finalResumeText) {
+          updateSet.resumeText = finalResumeText;
+        }
+
         await db
           .insert(users)
           .values({
@@ -59,18 +93,14 @@ export async function POST(req: NextRequest) {
             email: userEmail,
             googleId: authUser?.id || null,
             username: trimmed,
-            resumeUrl: resumeUrl || null,
-            resumeText: resumeText || null,
-            rank: 'Bronze',
-            points: 0,
+            resumeUrl: finalResumeUrl,
+            resumeText: finalResumeText,
+            rank: existingRecord?.rank || 'Bronze',
+            points: existingRecord?.points ?? 0,
           })
           .onConflictDoUpdate({
             target: users.email,
-            set: {
-              username: trimmed,
-              resumeUrl: resumeUrl || null,
-              resumeText: resumeText || null,
-            },
+            set: updateSet,
           });
       }
     }

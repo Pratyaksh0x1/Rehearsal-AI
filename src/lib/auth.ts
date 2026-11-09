@@ -93,7 +93,7 @@ export const authOptions: NextAuthOptions = {
             token.username = existing[0].username;
             token.rank = existing[0].rank;
             token.points = existing[0].points;
-            token.isOnboarded = Boolean(existing[0].username && existing[0].resumeText);
+            token.isOnboarded = Boolean(existing[0].username);
           }
         } catch (err) {
           console.error('Error in jwt callback fetching user:', err);
