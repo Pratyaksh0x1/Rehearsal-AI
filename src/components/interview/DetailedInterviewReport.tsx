@@ -422,3 +422,4 @@ export function DetailedInterviewReport({
     </div>
   );
 }
+

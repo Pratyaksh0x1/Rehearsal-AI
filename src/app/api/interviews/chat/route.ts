@@ -15,19 +15,20 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const {
-      messages,
       type,
       problemTitle,
-      currentCode,
       problem,
       phase,
       complexityAsked,
       resumeSnippet,
-      interviewerName,
-      interviewerRole,
-      interviewerPersonality,
       stream: wantsStreamParam,
     } = body;
+
+    const messages = body.messages || body.conversation || [];
+    const currentCode = body.currentCode || body.code || '';
+    const interviewerName = body.interviewerName || body.interviewer?.name || '';
+    const interviewerRole = body.interviewerRole || body.interviewer?.role || '';
+    const interviewerPersonality = body.interviewerPersonality || body.interviewer?.personality || '';
 
     let systemPrompt = '';
     const nameRoleStr = interviewerName

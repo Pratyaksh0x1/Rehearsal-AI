@@ -33,31 +33,37 @@ export function InterviewGreetingRoom({
 
   const userVideoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const candidateReplyRef = useRef('');
+  candidateReplyRef.current = candidateReply;
 
-  // Initialize candidate camera
+  // Initialize candidate camera reliably
   useEffect(() => {
     let mounted = true;
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-          audio: false, // audio handled by VoicePanel/analyser
+          audio: false,
         });
         if (!mounted) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
         streamRef.current = stream;
+        setHasCameraPermission(true);
+
         if (userVideoRef.current) {
           userVideoRef.current.srcObject = stream;
           userVideoRef.current.play().catch(console.warn);
         }
-        setHasCameraPermission(true);
       } catch (err) {
         console.warn('Could not acquire candidate webcam stream:', err);
       }
     }
     void initCamera();
+
     return () => {
       mounted = false;
       if (streamRef.current) {
@@ -65,6 +71,133 @@ export function InterviewGreetingRoom({
       }
     };
   }, []);
+
+  // Ensure video element plays as soon as ref or permission changes
+  useEffect(() => {
+    if (userVideoRef.current && streamRef.current) {
+      if (userVideoRef.current.srcObject !== streamRef.current) {
+        userVideoRef.current.srcObject = streamRef.current;
+      }
+      userVideoRef.current.play().catch(console.warn);
+    }
+  }, [hasCameraPermission]);
+
+  // Audio level analyser on microphone for live speech detection
+  useEffect(() => {
+    let mounted = true;
+    let animId: number;
+
+    async function initMicAudio() {
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
+        if (!mounted) {
+          audioStream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        audioStreamRef.current = audioStream;
+
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AudioCtx();
+        audioCtxRef.current = ctx;
+
+        const source = ctx.createMediaStreamSource(audioStream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        const checkVolume = () => {
+          if (!mounted) return;
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const avg = sum / dataArray.length;
+
+          // If sound level is above ambient noise, candidate is speaking
+          if (avg > 18) {
+            setCandidateSpeaking(true);
+          } else {
+            setCandidateSpeaking(false);
+          }
+
+          animId = requestAnimationFrame(checkVolume);
+        };
+        checkVolume();
+      } catch (e) {
+        console.warn('Microphone stream init failed for greeting room:', e);
+      }
+    }
+
+    void initMicAudio();
+
+    return () => {
+      mounted = false;
+      cancelAnimationFrame(animId);
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => undefined);
+      }
+    };
+  }, []);
+
+  // Browser Speech Recognition for candidate answering
+  useEffect(() => {
+    if (greetingPhase !== 'candidate_answering') return;
+
+    const SpeechRec =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+
+    let recognition: any = null;
+    let silenceTimer: NodeJS.Timeout;
+
+    try {
+      recognition = new SpeechRec();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript + ' ';
+        }
+        const trimmed = transcript.trim();
+        if (trimmed.length > 0) {
+          setCandidateReply(trimmed);
+          clearTimeout(silenceTimer);
+          // When candidate pauses after speaking, auto-submit reply
+          silenceTimer = setTimeout(() => {
+            if (trimmed.length > 2) {
+              void handleCandidateResponse(trimmed);
+            }
+          }, 1400);
+        }
+      };
+
+      recognition.onerror = (e: any) => {
+        console.warn('SpeechRecognition notice:', e);
+      };
+
+      recognition.start();
+    } catch (e) {
+      console.warn('Speech recognition start failed:', e);
+    }
+
+    return () => {
+      clearTimeout(silenceTimer);
+      try {
+        recognition?.stop();
+      } catch {}
+    };
+  }, [greetingPhase]);
 
   // Animate audio waveform bars when speaking
   useEffect(() => {
@@ -111,14 +244,14 @@ export function InterviewGreetingRoom({
     };
   }, [candidateName, interviewer.name, speakFn, stopSpeakingFn]);
 
-  // When candidate answers (via quick reply chip or speech)
+  // When candidate answers (via voice or quick reply chip)
   const handleCandidateResponse = async (replyText: string) => {
     if (greetingPhase !== 'candidate_answering') return;
     setCandidateReply(replyText);
     setCandidateSpeaking(true);
 
-    // Short simulated speech delay
-    await new Promise((r) => setTimeout(r, 1200));
+    // Short confirmation delay
+    await new Promise((r) => setTimeout(r, 900));
     setCandidateSpeaking(false);
     setGreetingPhase('interviewer_transition');
     setInterviewerSpeaking(true);
@@ -219,22 +352,30 @@ export function InterviewGreetingRoom({
         {/* RIGHT BOX: Candidate Live Camera Feed */}
         <div className="rounded-3xl border border-border dark:border-white/10 bg-[#161224] p-2 sm:p-3 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/3] sm:aspect-[16/11]">
           <div className="relative w-full h-full rounded-2xl overflow-hidden bg-[#120e1e] flex items-center justify-center">
-            {/* Live Camera Feed */}
-            {hasCameraPermission ? (
-              <video
-                ref={userVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover transform -scale-x-100"
-              />
-            ) : (
+            {/* Live Camera Feed - Always in DOM to prevent ref detachment */}
+            <video
+              ref={(el) => {
+                userVideoRef.current = el;
+                if (el && streamRef.current && el.srcObject !== streamRef.current) {
+                  el.srcObject = streamRef.current;
+                  el.play().catch(console.warn);
+                }
+              }}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-cover transform -scale-x-100 ${
+                hasCameraPermission ? 'block' : 'hidden'
+              }`}
+            />
+
+            {!hasCameraPermission && (
               <div className="flex flex-col items-center justify-center p-6 text-center">
                 <div className="w-20 h-20 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-300 mb-3 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
                   <User className="w-10 h-10" />
                 </div>
                 <h3 className="text-sm font-semibold text-white">{candidateName}</h3>
-                <p className="text-xs text-zinc-400 mt-1">Webcam initializing...</p>
+                <p className="text-xs text-zinc-400 mt-1">Starting camera...</p>
               </div>
             )}
 
@@ -252,9 +393,9 @@ export function InterviewGreetingRoom({
             {/* Candidate Bottom-Left Badge matching screenshot */}
             <div className="absolute bottom-4 left-4 z-10">
               <div className="bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl border border-white/10 shadow-sm flex items-center gap-2">
-                <Mic className="w-3.5 h-3.5 text-[#f59e0b]" />
+                <Mic className={`w-3.5 h-3.5 ${candidateSpeaking ? 'text-emerald-400 animate-pulse' : 'text-[#f59e0b]'}`} />
                 <span>{candidateName} (you)</span>
-                <span className="text-emerald-400 text-[11px] font-normal">
+                <span className={`${candidateSpeaking ? 'text-emerald-400 font-semibold' : 'text-zinc-300'} text-[11px]`}>
                   {candidateSpeaking ? '· Speaking' : '· Listening'}
                 </span>
               </div>
@@ -275,7 +416,11 @@ export function InterviewGreetingRoom({
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#f59e0b] block">
-              {interviewerSpeaking ? `${interviewer.name} is speaking:` : 'Your response:'}
+              {interviewerSpeaking
+                ? `${interviewer.name.toUpperCase()} IS SPEAKING:`
+                : candidateSpeaking
+                ? 'HEARING YOU SPEAK:'
+                : 'SPEAK INTO YOUR MICROPHONE OR PICK A RESPONSE:'}
             </span>
             <p className="text-sm sm:text-base font-serif text-text-primary dark:text-white italic">
               {greetingPhase === 'interviewer_greeting' &&
@@ -297,7 +442,7 @@ export function InterviewGreetingRoom({
               <button
                 type="button"
                 onClick={() =>
-                  void handleCandidateResponse("I'm doing great, excited for the coding round!")
+                  void handleCandidateResponse("I'm doing great, excited to be here!")
                 }
                 className="px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-[#f59e0b] border border-amber-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
               >
@@ -306,7 +451,7 @@ export function InterviewGreetingRoom({
               <button
                 type="button"
                 onClick={() =>
-                  void handleCandidateResponse('Doing very well, thank you! Ready to solve problems.')
+                  void handleCandidateResponse('Doing well, thank you! Ready.')
                 }
                 className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition-all cursor-pointer shadow-sm active:scale-95"
               >

@@ -238,34 +238,60 @@ export default function TechnicalRoundPage() {
     hasNudgedRef.current = false;
   };
 
-  // Spoken problem briefing
-  const buildBriefing = (p: Problem): string => {
-    let desc = (p.description || '').replace(/\s+/g, ' ').trim();
-    if (desc.length > 520) {
-      desc = desc.slice(0, 520);
-      const cut = desc.lastIndexOf('. ');
-      desc = cut > 200 ? desc.slice(0, cut + 1) : desc;
+  // Spoken TTS helper for greeting & wrapup transitions
+  const speakInterviewerTts = async (text: string) => {
+    try {
+      const res = await fetch('/api/voice/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          voice: interviewer.voice || interviewer.voiceId,
+          model: interviewer.model,
+        }),
+      });
+      if (res.ok && res.headers.get('content-type')?.includes('audio')) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        await new Promise<void>((resolve) => {
+          audio.onended = () => resolve();
+          audio.onerror = () => resolve();
+          audio.play().catch(() => resolve());
+        });
+        URL.revokeObjectURL(url);
+        return;
+      }
+    } catch {
+      /* fallback to browser speech synthesis */
     }
-    const ex = p.examples?.[0];
-    const exText = ex ? ` For example, with input ${ex.input}, the expected output is ${ex.output}.` : '';
-    const cons = p.constraints && p.constraints.length ? ` Keep in mind: ${p.constraints.slice(0, 2).join('; ')}.` : '';
-    return `Your problem today is called ${p.title}, a ${String(p.difficulty || 'medium').toLowerCase()} level problem. ${desc}${exText}${cons}`;
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      await new Promise<void>((resolve) => {
+        u.onend = () => resolve();
+        u.onerror = () => resolve();
+        window.speechSynthesis.speak(u);
+      });
+    }
   };
 
-  // Called when entering workspace to speak the problem details
+  const stopInterviewerTts = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
+  // Called when entering workspace to speak a concise welcome
   const startInterview = async () => {
-    const iv = interviewerRef.current;
     for (let i = 0; i < 50 && !problemRef.current; i++) await new Promise((r) => setTimeout(r, 200));
     const p = problemRef.current;
 
-    const say = async (text: string) => {
-      pushMessage('assistant', text);
-      await voiceRef.current?.speak(text);
-    };
-
     if (p) {
-      await say(buildBriefing(p));
-      await say('Take a moment to read it. When you are ready, talk me through how you would solve it.');
+      const intro = `Welcome to the coding chamber! You are solving ${p.title}. Take a look at the specification on the left, and let me know your thoughts on how to solve it.`;
+      pushMessage('assistant', intro);
+      await voiceRef.current?.speak(intro);
     }
   };
 
@@ -284,46 +310,35 @@ export default function TechnicalRoundPage() {
     try {
       const p = problemRef.current;
       const iv = interviewerRef.current;
-      const wantsStream = Boolean(options?.onChunk);
 
       const res = await fetch('/api/interviews/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'Technical',
+          messages: updatedMessages,
           conversation: updatedMessages,
+          currentCode: codeRef.current,
           code: codeRef.current,
           language,
           problem: p,
+          interviewerName: iv.name,
+          interviewerRole: iv.role,
+          interviewerPersonality: iv.personality,
           interviewer: iv,
-          stream: wantsStream,
+          stream: false,
         }),
       });
 
       if (!res.ok) throw new Error('Chat API returned an error');
 
-      if (wantsStream && res.body) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let full = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          full += chunk;
-          options?.onChunk?.(chunk);
-        }
-        pushMessage('assistant', full);
-        return full;
-      }
-
       const data = await res.json();
-      const reply = data.reply || 'Could you walk me through your approach?';
+      const reply = data.reply || "That's a good direction. What data structures would you use, and what is the Big-O complexity?";
       pushMessage('assistant', reply);
       return reply;
     } catch (err) {
       console.error('Chat routing error:', err);
-      const fallback = "Let's focus on the problem constraints. How would you solve this?";
+      const fallback = "I'm following your line of thought. Could you walk me through your solution step by step?";
       pushMessage('assistant', fallback);
       return fallback;
     } finally {
@@ -468,8 +483,8 @@ export default function TechnicalRoundPage() {
             candidateName={candidateName}
             interviewer={interviewer}
             problemTitle={problem?.title}
-            speakFn={(text) => voiceRef.current?.speak(text) || Promise.resolve()}
-            stopSpeakingFn={() => voiceRef.current?.stopSpeaking()}
+            speakFn={speakInterviewerTts}
+            stopSpeakingFn={stopInterviewerTts}
             onProceedToCoding={() => {
               phaseRef.current = 'coding-workspace';
               setPhase('coding-workspace');
@@ -479,19 +494,6 @@ export default function TechnicalRoundPage() {
             }}
           />
         </main>
-
-        {/* Hidden persistent VoicePanel to power Gnani TTS & STT audio context */}
-        <div className="hidden pointer-events-none">
-          <VoicePanel
-            ref={voiceRef}
-            autoStart={true}
-            onSendMessage={handleUserMessage}
-            panelistName={interviewer.name}
-            voice={interviewer.voice}
-            model={interviewer.model}
-            voiceId={interviewer.voiceId}
-          />
-        </div>
       </div>
     );
   }
@@ -507,7 +509,7 @@ export default function TechnicalRoundPage() {
             interviewerName={interviewer.name}
             interviewerAvatar={interviewer.avatarUrl}
             durationMs={2800}
-            speakFn={(text) => voiceRef.current?.speak(text) || Promise.resolve()}
+            speakFn={speakInterviewerTts}
             onComplete={() => {
               setIsReviewModalOpen(true);
             }}
@@ -531,17 +533,6 @@ export default function TechnicalRoundPage() {
             />
           )}
         </main>
-
-        <div className="hidden pointer-events-none">
-          <VoicePanel
-            ref={voiceRef}
-            onSendMessage={handleUserMessage}
-            panelistName={interviewer.name}
-            voice={interviewer.voice}
-            model={interviewer.model}
-            voiceId={interviewer.voiceId}
-          />
-        </div>
       </div>
     );
   }

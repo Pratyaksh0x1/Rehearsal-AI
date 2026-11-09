@@ -255,7 +255,7 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [headphonesMode, setHeadphonesMode] = useState(false);
+  const [headphonesMode, setHeadphonesMode] = useState(true);
   const [textInput, setTextInput] = useState('');
   const [volumeLevel, setVolumeLevel] = useState(0);
   const [lastReplyText, setLastReplyText] = useState('');
@@ -272,6 +272,8 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const micGenRef = useRef(0);
   const micStartedAtRef = useRef(0);
+  const browserRecognitionRef = useRef<any>(null);
+  const browserTranscriptRef = useRef('');
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playResolverRef = useRef<(() => void) | null>(null);
@@ -287,7 +289,7 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
   const busyRef = useRef(false);
   const ignoreUntilRef = useRef(0);
   const isMutedRef = useRef(false);
-  const headphonesModeRef = useRef(false);
+  const headphonesModeRef = useRef(true);
   const interruptVoicedMsRef = useRef(0);
 
   // Turn timing & resumption refs
@@ -411,7 +413,7 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
         if (token === speakTokenRef.current) {
           isAgentSpeakingRef.current = false;
           setIsAgentSpeaking(false);
-          ignoreUntilRef.current = Date.now() + 600; // brief cooldown to let speaker echoes decay
+          ignoreUntilRef.current = Date.now() + 1200; // 1.2s cooldown to let speaker echoes decay
           setStatusMessage('Listening - speak any time');
         }
       }
@@ -601,18 +603,21 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
         await sttChainRef.current;
       }
 
-      const text = partsRef.current.join(' ').trim();
+      let text = partsRef.current.join(' ').trim();
+      if (!text && browserTranscriptRef.current.trim()) {
+        text = browserTranscriptRef.current.trim();
+      }
+      browserTranscriptRef.current = '';
       partsRef.current = [];
       setIsTranscribing(false);
 
       if (text.length > 1) {
         await respond(text);
       } else {
-        // Requirement 5: Speak polite prompt if STT transcript was empty
-        console.log('[VoicePanel] Empty STT transcript -> voicing fallback prompt');
+        // Do not voice an empty fallback prompt aloud, as that creates an acoustic echo loop
+        console.log('[VoicePanel] Empty STT transcript -> remaining in listening mode');
         busyRef.current = false;
-        setStatusMessage("I didn't catch that - try again");
-        await speak(EMPTY_STT_FALLBACK_PHRASE);
+        setStatusMessage('Listening - speak any time');
       }
     },
     [respond, speak]
@@ -642,6 +647,12 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
 
   const stopMic = useCallback(() => {
     micGenRef.current++;
+    if (browserRecognitionRef.current) {
+      try {
+        browserRecognitionRef.current.stop();
+      } catch {}
+      browserRecognitionRef.current = null;
+    }
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     processorRef.current = null;
@@ -672,6 +683,35 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
       const ctx: AudioContext = new AudioCtx();
       if (ctx.state === 'suspended') await ctx.resume();
       audioCtxRef.current = ctx;
+
+      // Start Browser Speech Recognition in parallel for instant zero-latency transcription
+      const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRec) {
+        try {
+          const rec = new SpeechRec();
+          rec.continuous = true;
+          rec.interimResults = true;
+          rec.lang = 'en-US';
+          rec.onresult = (ev: any) => {
+            if (isAgentSpeakingRef.current) return;
+            for (let i = ev.resultIndex; i < ev.results.length; i++) {
+              const res = ev.results[i];
+              if (res.isFinal) {
+                const phrase = res[0].transcript.trim();
+                if (phrase) {
+                  browserTranscriptRef.current += ' ' + phrase;
+                  partsRef.current.push(phrase);
+                }
+              }
+            }
+          };
+          rec.onerror = () => undefined;
+          rec.start();
+          browserRecognitionRef.current = rec;
+        } catch (e) {
+          console.warn('Browser SpeechRecognition notice:', e);
+        }
+      }
 
       const source = ctx.createMediaStreamSource(stream);
       const processor = ctx.createScriptProcessor(4096, 1, 1);
