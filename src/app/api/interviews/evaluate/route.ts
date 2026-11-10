@@ -187,7 +187,7 @@ Return strict JSON matching the schema.`,
       let evaluationModel: string;
       try {
         const result = await generateWithSchema(messages, TechnicalEvaluationSchema, EVAL_LLM_OPTIONS);
-        data = result.data;
+        data = TechnicalEvaluationSchema.parse(result.data);
         evaluationProvider = result.providerUsed;
         evaluationModel = result.modelUsed;
       } catch (llmErr) {
