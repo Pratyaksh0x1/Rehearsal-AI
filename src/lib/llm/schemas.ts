@@ -115,6 +115,16 @@ export const GreetingResponseSchema = z.object({
   action: z
     .enum(['START_CODING', 'CONTINUE_CONVERSATION'])
     .describe("Use START_CODING only when intent is ready_to_start; otherwise use CONTINUE_CONVERSATION."),
+}).superRefine((response, context) => {
+  const isReady = response.intent === 'ready_to_start';
+  const shouldStart = response.action === 'START_CODING';
+  if (isReady !== shouldStart) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'START_CODING must be used exactly when intent is ready_to_start.',
+      path: ['action'],
+    });
+  }
 });
 
 export type GreetingResponse = z.infer<typeof GreetingResponseSchema>;
