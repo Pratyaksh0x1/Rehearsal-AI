@@ -200,42 +200,42 @@ export function DetailedInterviewReport({
       score: categoryBreakdown?.correctness?.score ?? skills.correctness,
       justification:
         categoryBreakdown?.correctness?.justification ??
-        'Passes automated test assertions and correctly handles input variations.',
+        'No detailed AI assessment was returned for this category.',
     },
     {
       name: 'Code Quality',
       score: categoryBreakdown?.codeQuality?.score ?? skills.readability,
       justification:
         categoryBreakdown?.codeQuality?.justification ??
-        'Adheres to language idioms, clean modular structure, and naming conventions.',
+        'No detailed AI assessment was returned for this category.',
     },
     {
       name: 'Time & Space Complexity',
       score: categoryBreakdown?.complexity?.score ?? skills.thinkingAloud,
       justification:
         categoryBreakdown?.complexity?.justification ??
-        'Analyzed Big-O bounds and balanced runtime performance against memory overhead.',
+        'No detailed AI assessment was returned for this category.',
     },
     {
       name: 'Problem-Solving Approach',
       score: categoryBreakdown?.approach?.score ?? skills.approach,
       justification:
         categoryBreakdown?.approach?.justification ??
-        'Selected optimal data structures and justified trade-offs systematically.',
+        'No detailed AI assessment was returned for this category.',
     },
     {
       name: 'Communication',
       score: categoryBreakdown?.communication?.score ?? skills.explaining,
       justification:
         categoryBreakdown?.communication?.justification ??
-        'Articulated mental model and verbalized algorithmic decisions throughout the round.',
+        'No detailed AI assessment was returned for this category.',
     },
     {
       name: 'Edge-Case Handling',
       score: categoryBreakdown?.edgeCases?.score ?? skills.structure,
       justification:
         categoryBreakdown?.edgeCases?.justification ??
-        'Handled zero, empty, single-element, and extreme constraint boundary conditions.',
+        'No detailed AI assessment was returned for this category.',
     },
   ];
 

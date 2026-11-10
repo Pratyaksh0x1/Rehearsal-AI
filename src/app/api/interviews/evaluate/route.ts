@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/supabase/server';
-import { generateWithSchema, Message } from '@/lib/llm';
+import { generateWithSchema, Message, type GenerateOptions } from '@/lib/llm';
 import {
   TechnicalEvaluationSchema,
   HREvaluationSchema,
@@ -17,7 +17,7 @@ import { runTestCases } from '@/lib/judge';
 
 export const maxDuration = 120;
 
-const EVAL_LLM_OPTIONS = {
+const EVAL_LLM_OPTIONS: GenerateOptions = {
   provider: 'groq',
   fallbackOrder: ['groq', 'gemini', 'deepseek', 'openrouter'],
   allowMockFallback: false,
@@ -25,7 +25,7 @@ const EVAL_LLM_OPTIONS = {
   timeoutMs: 20000,
   maxRetries: 0,
   maxSchemaAttempts: 0,
-} as const;
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -359,7 +359,11 @@ Return strict JSON matching the schema.`,
             type: 'HR',
             score: overallScore,
             transcript: JSON.stringify(conversation || []),
-            feedbackJson: data,
+            feedbackJson: {
+              ...data,
+              evaluationProvider: providerUsed,
+              evaluationModel: modelUsed,
+            },
           });
 
           // Award HR rating points and elevate HR Rank
@@ -469,7 +473,11 @@ Return strict JSON matching the schema with:
             type: 'Resume Review',
             score: data.score,
             transcript: JSON.stringify(conversation || 'Resume Review Execution'),
-            feedbackJson: data,
+            feedbackJson: {
+              ...data,
+              evaluationProvider: providerUsed,
+              evaluationModel: modelUsed,
+            },
           });
         } catch (dbErr) {
           console.error('Error recording Resume Review in DB:', dbErr);

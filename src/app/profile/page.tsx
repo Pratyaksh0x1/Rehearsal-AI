@@ -119,7 +119,11 @@ function ProfileContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to replace resume.');
 
-      setResumeMessage('✅ Resume replaced and re-parsed successfully.');
+      setResumeMessage(
+        data.evaluationStatus === 'complete'
+          ? '✅ Resume replaced, parsed, and scored successfully.'
+          : '✅ Resume replaced and parsed. AI scoring is temporarily unavailable; try again later.'
+      );
       setResumeFile(null);
       captureEvent('profile_resume_replaced', { wordCount: data.wordCount });
       await fetchProfile();
