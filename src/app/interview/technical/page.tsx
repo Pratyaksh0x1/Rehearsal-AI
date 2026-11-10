@@ -179,6 +179,7 @@ function TechnicalRoundContent() {
   const [isSubmitConfirmOpen, setIsSubmitConfirmOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [profanityViolationCount, setProfanityViolationCount] = useState(0);
+  const [pasteViolationCount, setPasteViolationCount] = useState(0);
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [proctorWarning, setProctorWarning] = useState<{
     isOpen: boolean;
@@ -197,6 +198,7 @@ function TechnicalRoundContent() {
     maxPauseSec: 0,
   });
   const codeSnapshotsRef = useRef<Array<{ timestamp: number; code: string }>>([]);
+  const interviewStartTimeRef = useRef<number | null>(null);
 
   // Evaluation state
   const [isEvaluating, setIsEvaluating] = useState(false);
@@ -204,6 +206,7 @@ function TechnicalRoundContent() {
   const [isGeneratingProblem, setIsGeneratingProblem] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const activeChatAbortRef = useRef<AbortController | null>(null);
+  const problemLoadInFlightRef = useRef(false);
 
   useEffect(() => {
     if (pairParam) {
@@ -214,19 +217,25 @@ function TechnicalRoundContent() {
   }, [pairParam]);
 
   const loadProblemData = useCallback(async () => {
+    // Prevent duplicate parallel generations (React strict-mode double effect, double clicks).
+    if (problemLoadInFlightRef.current) return;
+    problemLoadInFlightRef.current = true;
     setGenerationError(null);
     setIsGeneratingProblem(true);
 
+    // Keep the selected interview question stable for the entire round; changing the editor
+    // language should not silently swap to a different problem mid-interview.
+    const targetLang = langParam || language || 'python';
+
     // 1. First check if problem is already cached in client sessionStorage (e.g. page refresh during interview)
     try {
-      const cached = sessionStorage.getItem('rehearsal_active_problem');
+      const cached = sessionStorage.getItem('rehearsal_active_problem_v2');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed?.problem && parsed?.problemSessionId) {
           setProblem(parsed.problem);
           setProblemSessionId(parsed.problemSessionId);
 
-          const targetLang = langParam || language || 'python';
           const starters: Record<string, string> = {
             python: parsed.problem.starterCode?.python || parsed.problem.starter_code?.python || DEFAULT_STARTER_CODE.python,
             javascript: parsed.problem.starterCode?.javascript || parsed.problem.starter_code?.javascript || DEFAULT_STARTER_CODE.javascript,
@@ -246,6 +255,7 @@ function TechnicalRoundContent() {
               if (codeParsed.language) setLanguage(codeParsed.language);
             } catch {}
           }
+          problemLoadInFlightRef.current = false;
           setIsGeneratingProblem(false);
           return;
         }
@@ -254,92 +264,112 @@ function TechnicalRoundContent() {
 
     // 2. Generate problem dynamically via LLM generator
     try {
-      const res = await fetch('/api/interview/generate-problem', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rank: userRank,
-          company: companyParam && companyParam !== 'Any company' ? companyParam : null,
-          language: langParam || language || 'python',
-        }),
-      });
+      const previousTitleKey = `rehearsal_previous_problem_titles_${user?.id || 'candidate'}`;
+      let previousProblemTitles: string[] = [];
+      try {
+        const storedTitles = JSON.parse(localStorage.getItem(previousTitleKey) || '[]');
+        if (Array.isArray(storedTitles)) {
+          previousProblemTitles = storedTitles.filter(
+            (title): title is string => typeof title === 'string'
+          );
+        }
+      } catch {}
 
-      if (!res.ok) {
-        // Fallback to GET /api/problems?tier=...&mode=next
-        const fallbackRes = await fetch(
-          `/api/problems?tier=${encodeURIComponent(userRank)}&mode=next${
-            companyParam && companyParam !== 'Any company' ? `&company=${encodeURIComponent(companyParam)}` : ''
-          }`
-        );
-        if (fallbackRes.ok) {
-          const fbData = await fallbackRes.json();
-          const selected = fbData.problem || fbData;
-          if (selected) {
-            setProblem(selected);
-            if (fbData.problemSessionId) setProblemSessionId(fbData.problemSessionId);
-            const targetLang = langParam || language || 'python';
-            const starters: Record<string, string> = {
-              python: selected.starterCode?.python || selected.starter_code?.python || DEFAULT_STARTER_CODE.python,
-              javascript: selected.starterCode?.javascript || selected.starter_code?.javascript || DEFAULT_STARTER_CODE.javascript,
-              typescript: selected.starterCode?.typescript || (DEFAULT_STARTER_CODE as any).typescript || '',
-              cpp: selected.starterCode?.cpp || selected.starter_code?.cpp || DEFAULT_STARTER_CODE.cpp,
-              java: selected.starterCode?.java || selected.starter_code?.java || DEFAULT_STARTER_CODE.java,
-            };
-            setCodeDrafts(starters);
-            setCode(starters[targetLang] || DEFAULT_STARTER_CODE.python);
-            sessionStorage.setItem('rehearsal_active_problem', JSON.stringify({ problem: selected, problemSessionId: fbData.problemSessionId }));
-            setIsGeneratingProblem(false);
-            return;
+      // Retry automatically so the candidate never has to press "Retry" manually.
+      const MAX_AUTO_ATTEMPTS = 4;
+      let data: any = null;
+      let lastGenError: Error | null = null;
+      for (let attempt = 1; attempt <= MAX_AUTO_ATTEMPTS; attempt++) {
+        try {
+          const res = await fetch('/api/interview/generate-problem', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rank: userRank,
+              company: companyParam && companyParam !== 'Any company' ? companyParam : null,
+              language: targetLang,
+              previousProblemTitles,
+            }),
+          });
+
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => null);
+            const err: any = new Error(errorData?.error || `Problem generation failed (${res.status})`);
+            err.status = res.status;
+            throw err;
+          }
+
+          const json = await res.json();
+          if (!json.problem || !json.problemSessionId) {
+            throw new Error('Problem generation returned incomplete problem data.');
+          }
+          data = json;
+          break;
+        } catch (err: any) {
+          lastGenError = err;
+          // Auth / rate-limit errors will not fix themselves by retrying immediately.
+          if (err?.status === 401 || err?.status === 429) break;
+          if (attempt < MAX_AUTO_ATTEMPTS) {
+            await new Promise((r) => setTimeout(r, 800 * attempt));
           }
         }
-        throw new Error(`Problem generation failed (${res.status})`);
       }
-
-      const data = await res.json();
-      if (data.problemSessionId) {
-        setProblemSessionId(data.problemSessionId);
+      if (!data) {
+        throw lastGenError || new Error('Problem generation failed.');
       }
+      setProblemSessionId(data.problemSessionId);
       const selected: Problem = data.problem;
-      if (selected) {
-        setProblem(selected);
+      setProblem(selected);
 
-        const targetLang = langParam || language || 'python';
-        const starters: Record<string, string> = {
-          python: selected.starterCode?.python || selected.starter_code?.python || DEFAULT_STARTER_CODE.python,
-          javascript: selected.starterCode?.javascript || selected.starter_code?.javascript || DEFAULT_STARTER_CODE.javascript,
-          typescript: selected.starterCode?.typescript || (DEFAULT_STARTER_CODE as any).typescript || '',
-          cpp: selected.starterCode?.cpp || selected.starter_code?.cpp || DEFAULT_STARTER_CODE.cpp,
-          java: selected.starterCode?.java || selected.starter_code?.java || DEFAULT_STARTER_CODE.java,
-        };
-        setCodeDrafts(starters);
-        setCode(starters[targetLang] || DEFAULT_STARTER_CODE.python);
+      const starters: Record<string, string> = {
+        python: selected.starterCode?.python || selected.starter_code?.python || DEFAULT_STARTER_CODE.python,
+        javascript: selected.starterCode?.javascript || selected.starter_code?.javascript || DEFAULT_STARTER_CODE.javascript,
+        typescript: selected.starterCode?.typescript || (DEFAULT_STARTER_CODE as any).typescript || '',
+        cpp: selected.starterCode?.cpp || selected.starter_code?.cpp || DEFAULT_STARTER_CODE.cpp,
+        java: selected.starterCode?.java || selected.starter_code?.java || DEFAULT_STARTER_CODE.java,
+      };
+      setCodeDrafts(starters);
+      setCode(starters[targetLang] || DEFAULT_STARTER_CODE.python);
 
-        try {
-          sessionStorage.setItem(
-            'rehearsal_active_problem',
-            JSON.stringify({ problem: selected, problemSessionId: data.problemSessionId })
-          );
-        } catch {}
+      try {
+        const previousTitles = JSON.parse(localStorage.getItem(previousTitleKey) || '[]');
+        const titles = Array.isArray(previousTitles)
+          ? previousTitles.filter((title): title is string => typeof title === 'string')
+          : [];
+        const normalizedTitle = selected.title.trim().toLowerCase();
+        const uniqueTitles = [
+          selected.title,
+          ...titles.filter((title) => title.trim().toLowerCase() !== normalizedTitle),
+        ].slice(0, 30);
+        localStorage.setItem(previousTitleKey, JSON.stringify(uniqueTitles));
+      } catch {}
 
-        captureEvent('technical_round_started', {
-          problemTitle: selected.title,
-          rankTier: userRank,
-          difficulty: difficultyParam || selected.difficulty,
-          company: companyParam || 'Any company',
-          language: targetLang,
-        });
-      }
+      try {
+        sessionStorage.setItem(
+          'rehearsal_active_problem_v2',
+          JSON.stringify({ problem: selected, problemSessionId: data.problemSessionId })
+        );
+      } catch {}
+
+      captureEvent('technical_round_started', {
+        problemTitle: selected.title,
+        rankTier: userRank,
+        difficulty: difficultyParam || selected.difficulty,
+        company: companyParam || 'Any company',
+        language: targetLang,
+      });
     } catch (e: any) {
       console.error('Error generating problem:', e);
       setGenerationError(e?.message || 'Failed to prepare interview problem. Click below to retry.');
     } finally {
+      problemLoadInFlightRef.current = false;
       setIsGeneratingProblem(false);
     }
-  }, [userRank, companyParam, difficultyParam, langParam, language]);
+  }, [user?.id, userRank, companyParam, difficultyParam, langParam, language]);
 
   useEffect(() => {
     loadProblemData();
-  }, [loadProblemData]);
+  }, [userRank, companyParam, difficultyParam]);
 
   // Handle switching code editor language without discarding work
   const handleLanguageChange = (newLang: string) => {
@@ -532,6 +562,7 @@ function TechnicalRoundContent() {
   }, [phase]);
 
   const handlePasteBlocked = useCallback(() => {
+    setPasteViolationCount((prev) => prev + 1);
     setProctorWarning({
       isOpen: true,
       type: 'copy_paste',
@@ -758,6 +789,7 @@ function TechnicalRoundContent() {
           executionResult: submitExecution || executionResult,
           durationMinutes: elapsedMinutes,
           profanityViolations: profanityViolationCount,
+          pasteViolations: pasteViolationCount,
           screenSwitchCount: tabSwitchCount,
           pauseStats: pauseMetricsRef.current,
           codeSnapshots: codeSnapshotsRef.current.map((s) => s.code),
@@ -809,6 +841,8 @@ function TechnicalRoundContent() {
     resetInterviewTimer(`technical_${difficultyParam || 'standard'}`);
     try {
       sessionStorage.removeItem('rehearsal_active_code');
+      sessionStorage.removeItem('rehearsal_active_problem_v2');
+      sessionStorage.removeItem('rehearsal_active_problem');
     } catch {}
     phaseRef.current = 'wrapping-up';
     setPhase('wrapping-up');
@@ -884,7 +918,6 @@ function TechnicalRoundContent() {
             interviewerRole={interviewer.role}
             interviewerAvatar={interviewer.avatarUrl}
             language={language}
-            company={companyParam}
             durationMs={2600}
             onComplete={() => {
               phaseRef.current = 'greeting-room';
@@ -907,10 +940,15 @@ function TechnicalRoundContent() {
             candidateRank={user?.rank || 'Bronze'}
             interviewer={interviewer}
             problemTitle={problem?.title}
+            isProblemLoading={isGeneratingProblem}
+            problemLoadError={generationError}
+            onRetryProblem={loadProblemData}
             durationMinutes={initialDuration}
             speakFn={speakInterviewerTts}
             stopSpeakingFn={stopInterviewerTts}
             onProceedToCoding={() => {
+              if (!problem || isGeneratingProblem) return;
+              interviewStartTimeRef.current = Date.now();
               phaseRef.current = 'coding-workspace';
               setPhase('coding-workspace');
               setTimeout(() => {
@@ -947,9 +985,106 @@ function TechnicalRoundContent() {
 
   // 5. PHASE: FINAL DETAILED REPORT (Matching media_1794199496289_30454623.jpg)
   if (phase === 'final-report') {
-    const scoreVal = Math.round(Number(evaluation?.score) || 92);
+    const scoreVal = Number.isFinite(Number(evaluation?.score))
+      ? Math.round(Number(evaluation.score))
+      : 0;
     const verdictVal =
-      scoreVal >= 85 ? 'Strong Hire' : scoreVal >= 70 ? 'Hire' : 'Needs Practice';
+      scoreVal >= 85 ? 'Strong Hire' : scoreVal >= 70 ? 'Hire' : scoreVal > 0 ? 'Needs Practice' : 'Awaiting result';
+
+    const normalizedUserComplexity = (evaluation?.timeComplexity || '').toLowerCase().replace(/\s+/g, '');
+    const normalizedOptimalComplexity = ((problem as any)?.optimal_complexity?.time || '').toLowerCase().replace(/\s+/g, '');
+
+    const firstCodeSnapshot = codeSnapshotsRef.current[0];
+    const timeToFirstCodeMinutes =
+      interviewStartTimeRef.current && firstCodeSnapshot
+        ? Math.max(0, (firstCodeSnapshot.timestamp - interviewStartTimeRef.current) / 60000)
+        : 0;
+    const measuredDebugMinutes = pauseMetricsRef.current.totalPauseSec
+      ? Math.max(0, Math.ceil(pauseMetricsRef.current.totalPauseSec / 60))
+      : 0;
+
+    const dynamicWhatWentGreat = [
+      ...(passedTestCount > 0
+        ? [
+            {
+              title: 'Judge automated test suite',
+              subtitle: `${passedTestCount} of ${totalTestCount} test cases passed on final submission. Correctness`,
+            },
+          ]
+        : []),
+      ...(problem?.optimal_complexity?.time
+        ? [
+            {
+              title: 'Optimal complexity stated',
+              subtitle: `Accurately identified ${problem.optimal_complexity.time} time complexity. Approach`,
+            },
+          ]
+        : []),
+      ...(evaluation?.englishGrammarFeedback && !evaluation?.grammarMistakes?.length
+        ? [
+            {
+              title: 'Structured verbal explanation',
+              subtitle: `${evaluation.englishGrammarFeedback.slice(0, 110)}. Explaining`,
+            },
+          ]
+        : []),
+    ];
+
+    const dynamicNeedsImprovement = [
+      ...(totalTestCount > passedTestCount && totalTestCount > 0
+        ? [
+            {
+              title: 'Unresolved edge cases',
+              subtitle: `${totalTestCount - passedTestCount} test case(s) failed in the sandbox runner. Verify edge conditions before submission.`,
+            },
+          ]
+        : []),
+      ...(evaluation?.grammarMistakes?.length
+        ? [
+            {
+              title: 'English phrasing & grammar mistakes',
+              subtitle: `${evaluation.grammarMistakes.slice(0, 2).join('; ')}. Explaining`,
+            },
+          ]
+        : []),
+      ...(tabSwitchCount > 0
+        ? [
+            {
+              title: 'Tab switch warnings',
+              subtitle: `${tabSwitchCount} screen switch${tabSwitchCount === 1 ? '' : 'es'} recorded during the session. Keep focus on the problem.`,
+            },
+          ]
+        : []),
+      ...(profanityViolationCount > 0
+        ? [
+            {
+              title: 'Professional conduct alert',
+              subtitle: `${profanityViolationCount} inappropriate language warning(s) flagged during interview session. Maintain professional decorum. Conduct`,
+            },
+          ]
+        : []),
+      ...(pasteViolationCount > 0
+        ? [
+            {
+              title: 'Paste violation detected',
+              subtitle: `${pasteViolationCount} code-paste violation${pasteViolationCount === 1 ? '' : 's'} recorded. Write or type code independently.`,
+            },
+          ]
+        : []),
+      ...(evaluation?.codeStyleFeedback
+        ? [
+            {
+              title: 'Code quality improvements',
+              subtitle: `${evaluation.codeStyleFeedback.slice(0, 120)}. Readability`,
+            },
+          ]
+        : []),
+    ];
+
+    const integrityVerdict =
+      tabSwitchCount > 0 || profanityViolationCount > 0 || pasteViolationCount > 0
+        ? 'Minor Warnings'
+        : 'Clean';
 
     return (
       <div className="min-h-screen bg-bg text-text-primary flex flex-col transition-colors selection:bg-accent-subtle selection:text-accent">
@@ -969,78 +1104,22 @@ function TechnicalRoundContent() {
             }
             difficulty={problem?.difficulty || 'Easy'}
             durationMinutes={interviewDurationMinutes}
-            summaryText={evaluation?.feedback}
+            summaryText={evaluation?.feedback || 'Interview evaluation in progress. Results will reflect completion metrics and code quality once the judge has finished scoring.'}
             userCode={code}
-            pointsEarned={rankUpdate?.earnedPoints ?? 150}
+            pointsEarned={rankUpdate?.earnedPoints ?? 0}
             currentRank={rankUpdate?.newRank || userRank}
             nextRankTarget={200}
             onContinue={() => setIsReviewModalOpen(true)}
             skills={{
-              correctness: evaluation?.correctness ?? (totalTestCount > 0 ? Math.round((passedTestCount / totalTestCount) * 100) : 100),
-              approach: evaluation?.approach || 88,
-              explaining: evaluation?.communication || 85,
-              thinkingAloud: evaluation?.complexityAnalysis || 65,
-              readability: 70,
-              structure: 75,
+              correctness: Number.isFinite(Number(evaluation?.correctness)) ? Number(evaluation.correctness) : (totalTestCount > 0 ? Math.round((passedTestCount / totalTestCount) * 100) : 0),
+              approach: Number.isFinite(Number(evaluation?.approach)) ? Number(evaluation.approach) : 0,
+              explaining: Number.isFinite(Number(evaluation?.communication)) ? Number(evaluation.communication) : 0,
+              thinkingAloud: Number.isFinite(Number(evaluation?.complexityAnalysis)) ? Number(evaluation.complexityAnalysis) : 0,
+              readability: Number.isFinite(Number(evaluation?.codeStyleScore)) ? Number(evaluation.codeStyleScore) : 0,
+              structure: Number.isFinite(Number(evaluation?.structureScore)) ? Number(evaluation.structureScore) : 0,
             }}
-            whatWentGreat={[
-              {
-                title: 'Judge automated test suite',
-                subtitle: `${passedTestCount} of ${totalTestCount} test cases passing on final submission. Correctness`,
-              },
-              {
-                title: 'Optimal complexity stated',
-                subtitle: `Accurately identified ${problem?.optimal_complexity?.time || 'O(N)'} time complexity. Approach`,
-              },
-              {
-                title: 'Structured verbal explanation',
-                subtitle:
-                  evaluation?.englishGrammarFeedback && !evaluation?.grammarMistakes?.length
-                    ? `${evaluation.englishGrammarFeedback.slice(0, 110)}. Explaining`
-                    : 'Walked through algorithmic decisions clearly. Explaining',
-              },
-            ]}
-            needsImprovement={[
-              ...(totalTestCount > passedTestCount
-                ? [
-                    {
-                      title: 'Unresolved edge cases',
-                      subtitle: `${totalTestCount - passedTestCount} test cases failed in the sandbox runner. Verify edge cases before final submission.`,
-                    },
-                  ]
-                : []),
-              ...(evaluation?.grammarMistakes && evaluation.grammarMistakes.length > 0
-                ? [
-                    {
-                      title: 'English phrasing & grammar mistakes',
-                      subtitle: `${evaluation.grammarMistakes.slice(0, 2).join('; ')}. Explaining`,
-                    },
-                  ]
-                : evaluation?.englishGrammarFeedback
-                ? [
-                    {
-                      title: 'Spoken English & flow clarity',
-                      subtitle: `${evaluation.englishGrammarFeedback.slice(0, 120)}. Explaining`,
-                    },
-                  ]
-                : []),
-              ...(profanityViolationCount > 0
-                ? [
-                    {
-                      title: 'Professional conduct alert',
-                      subtitle: `${profanityViolationCount} inappropriate language warning(s) flagged during interview session. Maintain professional decorum. Conduct`,
-                    },
-                  ]
-                : []),
-              {
-                title: 'Variable naming clarity',
-                subtitle: 'Avoid single-letter variables in production implementations. Readability',
-              },
-              {
-                title: 'Explicit guard clauses',
-                subtitle: 'State guard clauses upfront before iterating. Structure',
-              },
-            ]}
+            whatWentGreat={dynamicWhatWentGreat}
+            needsImprovement={dynamicNeedsImprovement}
             pauseAnalysis={evaluation?.pauseAnalysis}
             selfCorrectionAnalysis={evaluation?.selfCorrectionAnalysis}
             codeStyleFeedback={evaluation?.codeStyleFeedback}
@@ -1048,51 +1127,49 @@ function TechnicalRoundContent() {
             grammarMistakes={evaluation?.grammarMistakes}
             screenSwitchingInfractions={tabSwitchCount}
             conductNotes={evaluation?.conductNotes}
-            interviewsRemaining={2}
             onRetake={() => router.push('/interview')}
             testCasesTable={
               executionResult?.test_results?.map((t: any) => ({
                 input: t.input || '',
-                expected: t.expected || '',
-                actual: t.actual || '',
+                expected: t.expectedOutput ?? t.expected_output ?? '',
+                actual: t.actualOutput ?? t.actual ?? '',
                 passed: Boolean(t.passed),
                 runtimeMs: t.timeMs,
-              })) || (problem?.test_cases?.map((t) => ({
-                input: t.input,
-                expected: t.expected_output,
-                actual: t.expected_output,
-                passed: true,
-                runtimeMs: 12,
-              })))
+              })) || []
             }
             complexityComparison={{
-              userTime: evaluation?.timeComplexity || 'O(N)',
-              optimalTime: (problem as any)?.optimal_complexity?.time || 'O(N)',
-              userSpace: evaluation?.spaceComplexity || 'O(1)',
-              optimalSpace: (problem as any)?.optimal_complexity?.space || 'O(1)',
+              userTime: evaluation?.timeComplexity || 'Not recorded',
+              optimalTime: (problem as any)?.optimal_complexity?.time || 'Not provided',
+              userSpace: evaluation?.spaceComplexity || 'Not recorded',
+              optimalSpace: (problem as any)?.optimal_complexity?.space || 'Not provided',
               verdict:
-                evaluation?.timeComplexity === (problem as any)?.optimal_complexity?.time
+                !evaluation?.timeComplexity || !((problem as any)?.optimal_complexity?.time)
+                  ? 'Complexity analysis pending.'
+                  : normalizedUserComplexity === normalizedOptimalComplexity
                   ? 'Matched optimal asymptotic runtime complexity.'
                   : 'Derived a valid algorithmic bound.',
             }}
             optimalApproach={{
-              overview: `The optimal approach uses ${(problem?.topics || ['hash maps', 'two pointers']).join(', ')} to achieve linear time complexity without redundant passes.`,
-              codeSnippet: (problem as any)?.referenceSolutionPython || (problem?.starterCode as any)?.[language] || code,
+              overview: problem?.solution_approach || 'Solution approach will appear once the evaluation is generated.',
+              codeSnippet: (problem as any)?.referenceSolutionPython || (problem?.starterCode as any)?.[language] || code || 'Code not available',
               practiceTopics: problem?.topics || ['Arrays', 'Two Pointers', 'Hash Tables'],
             }}
             pacingMetrics={{
               durationMinutes: interviewDurationMinutes,
               expectedMinutes: initialDuration,
-              timeToFirstCodeMinutes: 1.5,
-              debuggingMinutes: Math.max(1, Math.round(interviewDurationMinutes * 0.4)),
-              pauseCount: 3,
+              timeToFirstCodeMinutes: Number.isFinite(timeToFirstCodeMinutes) ? Number(timeToFirstCodeMinutes.toFixed(1)) : 0,
+              debuggingMinutes: measuredDebugMinutes,
+              pauseCount: pauseMetricsRef.current.pauseCount,
             }}
             integritySummary={{
-              cameraStatus: 'Face Verified (100%)',
-              pasteViolations: 0,
+              cameraStatus:
+                typeof navigator !== 'undefined' && 'mediaDevices' in navigator
+                  ? 'Camera active'
+                  : 'Camera unavailable',
+              pasteViolations: pasteViolationCount,
               screenSwitchCount: tabSwitchCount,
               audioWarnings: profanityViolationCount,
-              integrityVerdict: tabSwitchCount > 3 || profanityViolationCount > 0 ? 'Minor Warnings' : 'Clean',
+              integrityVerdict: integrityVerdict,
             }}
           />
 
@@ -1269,9 +1346,9 @@ function TechnicalRoundContent() {
                 {isGeneratingProblem ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-3">
                     <Loader2 className="w-6 h-6 animate-spin text-accent" />
-                    <p className="text-xs font-semibold text-text-primary">Preparing your problem...</p>
+                    <p className="text-xs font-semibold text-text-primary">Generating a fresh question with AI...</p>
                     <p className="text-[11px] text-text-subtle max-w-xs">
-                      Calibrating challenge tailored to {userRank} tier and {companyParam || 'interview standard'}.
+                      Questions can repeat too often, so we are creating a different one for your {userRank} tier. Please wait while we verify its tests.
                     </p>
                   </div>
                 ) : generationError ? (

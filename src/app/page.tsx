@@ -28,7 +28,7 @@ import {
 function LandingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isLoading, signInWithGoogle } = useAuth();
+  const { user, isLoading, isProfileLoading, signInWithGoogle } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -40,14 +40,14 @@ function LandingPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!isLoading && user) {
+    if (!isLoading && !isProfileLoading && user) {
       if (isUserOnboarded(user)) {
         router.push('/home');
       } else {
         router.push('/onboarding');
       }
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, isProfileLoading, router]);
 
   const handleGoogleSignIn = async () => {
     setAuthError(null);

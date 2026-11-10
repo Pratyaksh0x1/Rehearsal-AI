@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { User, Session } from '@supabase/supabase-js';
 import { isUserOnboarded } from '@/lib/user';
@@ -26,6 +26,7 @@ interface AuthContextType {
   user: AuthUser | null;
   session: Session | null;
   isLoading: boolean;
+  isProfileLoading: boolean;
   configError: string | null;
   signInWithGoogle: (nextPath?: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -36,6 +37,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   isLoading: true,
+  isProfileLoading: true,
   configError: null,
   signInWithGoogle: async () => { },
   signOut: async () => { },
@@ -48,6 +50,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
+  const profileSyncIdRef = useRef(0);
+  const currentUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentUserIdRef.current = user?.id ?? null;
+  }, [user]);
 
   // Initialize client and check env configuration
   useEffect(() => {
@@ -64,12 +73,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Sync Supabase user with database profile
-  const syncProfile = async (email: string, rawUser?: User) => {
+  const syncProfile = async (email: string, rawUser: User, syncId: number) => {
     try {
       const res = await fetch('/api/user/profile');
       if (res.ok) {
         const data = await res.json();
-        if (data.user) {
+        if (data.user && profileSyncIdRef.current === syncId) {
           const onboarded = isUserOnboarded({
             onboardedAt: data.user.onboardedAt,
             isOnboarded: Boolean(data.user.onboardedAt || data.user.username),
@@ -99,20 +108,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Default authenticated state while profile is loading/empty
-    setUser({
-      id: rawUser?.id || 'user_init',
-      email: email,
-      username: rawUser?.user_metadata?.username || null,
-      name: rawUser?.user_metadata?.full_name || 'Candidate',
-      rank: 'Bronze',
-      points: 0,
-      technicalRank: 'Bronze',
-      technicalPoints: 0,
-      hrRank: 'Bronze',
-      hrPoints: 0,
-      isOnboarded: false,
-      onboardedAt: null,
-    });
+    if (profileSyncIdRef.current === syncId) {
+      setUser((currentUser) =>
+        currentUser?.id === rawUser.id
+          ? currentUser
+          : {
+              id: rawUser.id,
+              email,
+              username: rawUser.user_metadata?.username || null,
+              name: rawUser.user_metadata?.full_name || 'Candidate',
+              rank: 'Bronze',
+              points: 0,
+              technicalRank: 'Bronze',
+              technicalPoints: 0,
+              hrRank: 'Bronze',
+              hrPoints: 0,
+              isOnboarded: false,
+              onboardedAt: null,
+            }
+      );
+    }
   };
 
   useEffect(() => {
@@ -121,13 +136,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen to Supabase Auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event: string, currentSession: Session | null) => {
+    } = supabase.auth.onAuthStateChange((event: string, currentSession: Session | null) => {
+      // Supabase re-emits SIGNED_IN / TOKEN_REFRESHED whenever the tab regains focus.
+      // For the already-signed-in user that must NOT restart the profile sync: doing so flips
+      // isProfileLoading to true, AuthGate unmounts the page, and the whole screen "refreshes".
+      if (
+        currentSession?.user &&
+        currentUserIdRef.current === currentSession.user.id &&
+        (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')
+      ) {
+        setSession(currentSession);
+        return;
+      }
+
+      const syncId = ++profileSyncIdRef.current;
       setSession(currentSession);
 
-      if (currentSession?.user?.email) {
-        await syncProfile(currentSession.user.email, currentSession.user);
+      const authUser = currentSession?.user;
+      const authEmail = authUser?.email;
+      if (authUser && authEmail) {
+        setUser((currentUser) =>
+          currentUser?.id === authUser.id
+            ? currentUser
+            : {
+                id: authUser.id,
+                email: authEmail,
+                username: authUser.user_metadata?.username || null,
+                name: authUser.user_metadata?.full_name || 'Candidate',
+                rank: 'Bronze',
+                points: 0,
+                technicalRank: 'Bronze',
+                technicalPoints: 0,
+                hrRank: 'Bronze',
+                hrPoints: 0,
+                isOnboarded: false,
+                onboardedAt: null,
+              }
+        );
+        setIsLoading(false);
+        setIsProfileLoading(true);
+        void syncProfile(authEmail, authUser, syncId).finally(() => {
+          if (profileSyncIdRef.current === syncId) {
+            setIsProfileLoading(false);
+          }
+        });
       } else {
         setUser(null);
+        setIsLoading(false);
+        setIsProfileLoading(false);
         if (event === 'SIGNED_OUT') {
           // If on a private route, redirect to home
           if (typeof window !== 'undefined' && window.location.pathname !== '/') {
@@ -135,23 +191,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       }
-      setIsLoading(false);
-    });
-
-    // Check initial session
-    supabase.auth.getSession().then(({ data: { session: initSession } }: any) => {
-      if (initSession?.user?.email) {
-        setSession(initSession);
-        syncProfile(initSession.user.email, initSession.user).finally(() =>
-          setIsLoading(false)
-        );
-      } else {
-        setUser(null);
-        setIsLoading(false);
-      }
     });
 
     return () => {
+      profileSyncIdRef.current += 1;
       subscription.unsubscribe();
     };
   }, [supabase]);
@@ -229,6 +272,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         session,
         isLoading,
+        isProfileLoading,
         configError,
         signInWithGoogle,
         signOut,

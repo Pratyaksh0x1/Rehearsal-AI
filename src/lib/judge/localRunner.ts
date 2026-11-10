@@ -38,7 +38,7 @@ export async function runLocalSandbox({
     if (lang === 'python' || lang === 'py') {
       const scriptPath = path.join(tmpDir, 'solution.py');
       fs.writeFileSync(scriptPath, code, 'utf-8');
-      cmd = 'python';
+      cmd = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
       args = ['-u', scriptPath];
     } else if (lang === 'javascript' || lang === 'js' || lang === 'typescript' || lang === 'ts') {
       const scriptPath = path.join(tmpDir, 'solution.js');

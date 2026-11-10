@@ -3,7 +3,7 @@
  * when running against test case inputs. If the user's code already includes a `main` function
  * or reads from stdin directly, it is executed without modification (competitive style).
  */
-export function buildExecutableCode(code: string, language: string): string {
+export function buildExecutableCode(code: string, language: string, functionName?: string): string {
   const lang = language.toLowerCase();
 
   if (lang === 'python' || lang === 'py') {
@@ -100,6 +100,8 @@ def _parse_args(raw):
                 parsed.append(p)
     return parsed
 
+_PREFERRED_FN = ${JSON.stringify(functionName || '')}
+
 def _judge_harness():
     raw = sys.stdin.read().strip() if hasattr(sys.stdin, 'read') else ''
     if not raw:
@@ -107,7 +109,7 @@ def _judge_harness():
     fn = None
     if 'Solution' in globals():
         inst = Solution()
-        known_methods = [
+        known_methods = ([_PREFERRED_FN] if _PREFERRED_FN else []) + [
             'solve', 'twoSum', 'isAnagram', 'containsDuplicate', 'maxProfit', 'maxArea',
             'minDistance', 'findOrder', 'cutRibbon', 'evalRPN', 'lengthOfLongestSubstring',
             'maxSubArray', 'search', 'numIslands', 'trap', 'longestCommonPrefix', 'merge',

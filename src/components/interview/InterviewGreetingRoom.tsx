@@ -14,6 +14,9 @@ interface InterviewGreetingRoomProps {
   candidateRank?: string;
   interviewer: AIPanelist;
   problemTitle?: string;
+  isProblemLoading: boolean;
+  problemLoadError: string | null;
+  onRetryProblem: () => void;
   durationMinutes?: number;
   onProceedToCoding: () => void;
   speakFn?: (text: string) => Promise<void>;
@@ -32,6 +35,9 @@ export function InterviewGreetingRoom({
   candidateRank = 'Bronze',
   interviewer,
   problemTitle,
+  isProblemLoading,
+  problemLoadError,
+  onRetryProblem,
   durationMinutes = 20,
   onProceedToCoding,
   speakFn,
@@ -481,12 +487,51 @@ export function InterviewGreetingRoom({
         <button
           type="button"
           onClick={onProceedToCoding}
-          className="text-xs font-semibold text-text-muted hover:text-accent transition-colors flex items-center gap-1 cursor-pointer focus-ring"
+          disabled={isProblemLoading || Boolean(problemLoadError) || !problemTitle}
+          className="text-xs font-semibold text-text-muted hover:text-accent transition-colors flex items-center gap-1 cursor-pointer focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span>Jump to coding</span>
+          <span>
+            {isProblemLoading || !problemTitle
+              ? 'Generating a fresh AI question...'
+              : problemLoadError
+              ? 'Question unavailable'
+              : 'Jump to coding'}
+          </span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {(isProblemLoading || problemLoadError) && (
+        <div
+          role={problemLoadError ? 'alert' : 'status'}
+          className={`mb-6 rounded-xl border p-4 text-sm ${
+            problemLoadError
+              ? 'border-danger/30 bg-danger/10 text-danger'
+              : 'border-accent/30 bg-accent-subtle text-text-primary'
+          }`}
+        >
+          <div className="flex items-center gap-2 font-semibold">
+            {isProblemLoading && <Sparkles className="h-4 w-4 animate-pulse text-accent" />}
+            {problemLoadError
+              ? 'We could not generate your interview question.'
+              : 'Generating a fresh interview question with AI...'}
+          </div>
+          <p className="mt-1 text-xs text-text-muted">
+            {problemLoadError
+              ? problemLoadError
+              : 'Questions can repeat too often, so we are creating a new one for you. Please wait here; coding will be available as soon as it is ready.'}
+          </p>
+          {problemLoadError && (
+            <button
+              type="button"
+              onClick={onRetryProblem}
+              className="mt-3 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground hover:bg-accent-hover"
+            >
+              Retry question generation
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 2 Big Video Boxes Side-by-Side */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch mb-8">
@@ -691,10 +736,17 @@ export function InterviewGreetingRoom({
             <button
               type="button"
               onClick={onProceedToCoding}
-              className="px-6 py-2.5 rounded-full font-bold text-slate-950 text-xs sm:text-sm bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:brightness-105 shadow-lg flex items-center gap-1.5 cursor-pointer"
+              disabled={isProblemLoading || Boolean(problemLoadError) || !problemTitle}
+              className="px-6 py-2.5 rounded-full font-bold text-slate-950 text-xs sm:text-sm bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:brightness-105 shadow-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span>Entering workspace</span>
-              <Sparkles className="w-3.5 h-3.5" />
+              <span>
+                {isProblemLoading || !problemTitle
+                  ? 'Waiting for your fresh question'
+                  : problemLoadError
+                  ? 'Question unavailable'
+                  : 'Entering workspace'}
+              </span>
+              {isProblemLoading && <Sparkles className="w-3.5 h-3.5 animate-pulse" />}
             </button>
           )}
         </div>

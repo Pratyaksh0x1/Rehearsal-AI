@@ -9,7 +9,6 @@ interface EnvironmentSetupAnimationProps {
   interviewerRole?: string;
   interviewerAvatar?: string;
   language?: string;
-  company?: string;
   durationMs?: number;
   onComplete: () => void;
 }
@@ -19,15 +18,12 @@ export function EnvironmentSetupAnimation({
   interviewerRole = 'Software Developer',
   interviewerAvatar = '/avatars/arjun.jpg',
   language = 'C++',
-  company = 'Any company',
   durationMs = 2600,
   onComplete,
 }: EnvironmentSetupAnimationProps) {
   const [progress, setProgress] = useState(0);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isFadingOut, setIsFadingOut] = useState(false);
-
-  const displayCompany = company && company !== 'Any company' ? company : 'Production';
 
   const steps = [
     {
@@ -41,8 +37,8 @@ export function EnvironmentSetupAnimation({
       icon: Volume2,
     },
     {
-      title: `Loading ${displayCompany} problem suite & test harness`,
-      subtitle: '3 visible test cases + 2 hidden edge cases primed',
+      title: 'Generating your fresh AI interview problem',
+      subtitle: 'Generating a fresh AI question and verifying its test cases',
       icon: Cpu,
     },
     {
@@ -216,4 +212,3 @@ export function EnvironmentSetupAnimation({
     </div>
   );
 }
-

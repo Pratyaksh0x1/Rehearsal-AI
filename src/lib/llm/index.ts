@@ -13,6 +13,9 @@ export interface GenerateOptions {
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number;
+  maxRetries?: number;
+  maxSchemaAttempts?: number;
+  allowMockFallback?: boolean;
   userId?: string;
   responseFormat?: 'text' | 'json';
 }
@@ -43,11 +46,12 @@ export async function generate(
     primaryProvider,
     ...fallbackOrder.filter((p) => p !== primaryProvider),
   ];
+  const maxRetries = options.maxRetries ?? MAX_RETRIES;
 
   let lastError: Error | null = null;
 
   for (const provider of orderedProviders) {
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const result = await executeProvider(provider, messages, options);
         if (result) return result;
@@ -66,7 +70,7 @@ export async function generate(
           // Fatal auth/quota limit error, immediately switch to the next fallback provider
           break;
         }
-        if (attempt < MAX_RETRIES) {
+        if (attempt < maxRetries) {
           await new Promise((r) => setTimeout(r, 400 * Math.pow(2, attempt)));
         }
       }
@@ -74,6 +78,9 @@ export async function generate(
   }
 
   // If no providers are configured or all remote calls failed, use smart mock fallback
+  if (options.allowMockFallback === false) {
+    throw lastError || new Error('No configured LLM provider returned a response.');
+  }
   console.error('[LLM] ALL providers failed or unconfigured -> returning MOCK reply. Last error:', lastError?.message || 'no API key set');
   return getMockResponse(messages, options);
 }
@@ -396,7 +403,7 @@ export async function generateWithSchema<T>(
   options: GenerateOptions = {}
 ): Promise<{ data: T; raw: string; providerUsed: string }> {
   let attempts = 0;
-  const maxSchemaAttempts = 2;
+  const maxSchemaAttempts = options.maxSchemaAttempts ?? 2;
 
   while (attempts <= maxSchemaAttempts) {
     attempts++;
@@ -667,4 +674,3 @@ function getMockResponse(messages: Message[], options: GenerateOptions): Generat
     modelUsed: 'mock-interviewer-v1',
   };
 }
-

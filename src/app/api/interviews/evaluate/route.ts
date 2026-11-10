@@ -5,6 +5,7 @@ import {
   TechnicalEvaluationSchema,
   HREvaluationSchema,
   ResumeEvaluationSchema,
+  TechnicalEvaluation,
 } from '@/lib/llm/schemas';
 import { db, isDatabaseConfigured } from '@/db';
 import { interviews, problemAttempts, users } from '@/db/schema';
@@ -13,6 +14,12 @@ import { calculateRankFromPoints } from '@/config/ranks';
 import { checkRateLimit } from '@/lib/llm/rate-limit';
 import { getProblemSession } from '@/lib/problems/session';
 import { runTestCases } from '@/lib/judge';
+
+export const maxDuration = 120;
+
+// Evaluation JSON is long (many free-text fields). The 2048-token default truncated it and made
+// the whole report fail, so give it room and a longer timeout.
+const EVAL_LLM_OPTIONS = { maxTokens: 6144, timeoutMs: 45000, maxSchemaAttempts: 1 } as const;
 
 export async function POST(req: NextRequest) {
   try {
@@ -56,26 +63,29 @@ export async function POST(req: NextRequest) {
     const interviewId = `int_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     if (type === 'Technical') {
-      let finalExecution = executionResult;
+      let finalExecution: any = null;
       let totalTests = 0;
       let passedTests = 0;
 
-      // If execution result is not provided but session has test cases, execute real test cases on server
-      if (!finalExecution && problemSessionId && code && language) {
+      // Always judge the submitted code on the server against the stored problem tests
+      // (visible + hidden). A client-supplied result can be stale (last "Run" = visible tests only,
+      // possibly older code) or simply forged to inflate score and rank points.
+      if (problemSessionId && code && String(code).trim() && language) {
         const sessionProblem = getProblemSession(problemSessionId);
         if (sessionProblem?.test_cases && sessionProblem.test_cases.length > 0) {
           try {
-            const runRes = await runTestCases({
+            finalExecution = await runTestCases({
               code,
               language,
               testCases: sessionProblem.test_cases,
             });
-            finalExecution = runRes;
           } catch (e) {
             console.error('Server evaluation test execution error:', e);
           }
         }
       }
+      // Only if the problem session is gone (e.g. dev server restarted) fall back to the client's result.
+      if (!finalExecution) finalExecution = executionResult;
 
       if (finalExecution?.test_results && Array.isArray(finalExecution.test_results)) {
         totalTests = finalExecution.test_results.length;
@@ -166,7 +176,31 @@ Return strict JSON matching the schema.`,
         },
       ];
 
-      const { data } = await generateWithSchema(messages, TechnicalEvaluationSchema);
+      let data: TechnicalEvaluation;
+      try {
+        // Never fall back to the canned mock report here: it would show a made-up score.
+        ({ data } = await generateWithSchema(messages, TechnicalEvaluationSchema, {
+          ...EVAL_LLM_OPTIONS,
+          allowMockFallback: false,
+        }));
+      } catch (llmErr) {
+        console.error('Technical evaluation LLM failed, using test-result-only report:', llmErr);
+        const pct = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0;
+        data = {
+          score: pct,
+          correctness: pct,
+          approach: pct,
+          complexityAnalysis: pct,
+          communication: pct,
+          englishGrammarFeedback: '',
+          grammarMistakes: [],
+          feedback:
+            'The AI feedback service was unavailable, so this report only reflects the automated test results for your code.',
+          timeComplexity: 'Not analysed',
+          spaceComplexity: 'Not analysed',
+          passed: totalTests > 0 && passedTests === totalTests,
+        };
+      }
       if (body.screenSwitchCount !== undefined) {
         data.screenSwitchingInfractions = body.screenSwitchCount;
       }
@@ -180,11 +214,18 @@ Return strict JSON matching the schema.`,
         // Balanced composite score weighted by real correctness
         const composite = Math.round(
           data.correctness * 0.45 +
-          (data.approach || 70) * 0.25 +
-          (data.complexityAnalysis || 70) * 0.15 +
-          (data.communication || 70) * 0.15
+          data.approach * 0.25 +
+          data.complexityAnalysis * 0.15 +
+          data.communication * 0.15
         );
-        data.score = Math.min(100, Math.max(10, composite));
+        data.score = Math.min(100, Math.max(0, composite));
+      }
+
+      // An empty submission must never earn score or points, whatever the LLM said.
+      if (!code || !String(code).trim()) {
+        data.score = 0;
+        data.correctness = 0;
+        data.passed = false;
       }
 
       // Save to database
@@ -198,6 +239,8 @@ Return strict JSON matching the schema.`,
             transcript: JSON.stringify(conversation || []),
             feedbackJson: {
               ...data,
+              problemTitle: problem?.title || null,
+              rankTier: problem?.rankTier || null,
               totalTests,
               passedTests,
               durationMinutes: durationMinutes || null,
@@ -233,8 +276,8 @@ Return strict JSON matching the schema.`,
           });
 
           if (userRecord.length > 0) {
-            // Points calculated directly from LLM score
-            earnedPoints = Math.max(10, Math.round(data.score * (data.passed ? 1.0 : 0.6)));
+            // Points calculated directly from the actual score; no floor so empty submissions do not earn points.
+            earnedPoints = Math.round(data.score * (data.passed ? 1.0 : 0.6));
             const currentTechPoints = userRecord[0].technicalPoints ?? userRecord[0].points ?? 0;
             const newTechPoints = currentTechPoints + earnedPoints;
             const newTechRank = calculateRankFromPoints(newTechPoints);
@@ -287,7 +330,7 @@ Return strict JSON matching the schema.`,
         },
       ];
 
-      const { data } = await generateWithSchema(messages, HREvaluationSchema);
+      const { data } = await generateWithSchema(messages, HREvaluationSchema, EVAL_LLM_OPTIONS);
 
       if (isDatabaseConfigured() && db && userEmail) {
         try {
@@ -319,7 +362,7 @@ Return strict JSON matching the schema.`,
             .limit(1);
 
           if (userRecord.length > 0) {
-            earnedHrPoints = Math.max(10, overallScore);
+            earnedHrPoints = Math.max(0, overallScore);
             const currentHrPoints = userRecord[0].hrPoints ?? 0;
             const newTotalHrPoints = currentHrPoints + earnedHrPoints;
             newHrRank = calculateRankFromPoints(newTotalHrPoints);
@@ -395,7 +438,7 @@ Return strict JSON matching the schema with:
         },
       ];
 
-      const { data } = await generateWithSchema(messages, ResumeEvaluationSchema);
+      const { data } = await generateWithSchema(messages, ResumeEvaluationSchema, EVAL_LLM_OPTIONS);
 
       if (isDatabaseConfigured() && db && userEmail) {
         try {

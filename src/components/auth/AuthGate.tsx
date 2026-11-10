@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from './AuthProvider';
 
@@ -13,13 +13,17 @@ interface AuthGateProps {
  * do not see a flash of protected UI while the session initializes.
  */
 export function AuthGate({ children }: AuthGateProps) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isProfileLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  // Once the page has been shown, never swap it back to the spinner (that would unmount it and
+  // wipe its state, e.g. when the tab regains focus and the profile re-syncs in the background).
+  const hasShownChildrenRef = useRef(false);
+  if (!isLoading && !isProfileLoading && user) hasShownChildrenRef.current = true;
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (!isLoading && !isProfileLoading && !user) {
       const qs = searchParams?.toString();
       const currentPath = `${pathname}${qs ? `?${qs}` : ''}`;
       const safeNext =
@@ -30,9 +34,9 @@ export function AuthGate({ children }: AuthGateProps) {
       const redirectUrl = safeNext ? `/?next=${safeNext}` : '/';
       router.replace(redirectUrl);
     }
-  }, [user, isLoading, router, pathname, searchParams]);
+  }, [user, isLoading, isProfileLoading, router, pathname, searchParams]);
 
-  if (isLoading || !user) {
+  if (!user || (!hasShownChildrenRef.current && (isLoading || isProfileLoading))) {
     return (
       <div className="min-h-screen bg-bg text-text-primary flex items-center justify-center p-6">
         <div className="w-full max-w-md space-y-4 text-center">
@@ -46,4 +50,3 @@ export function AuthGate({ children }: AuthGateProps) {
 
   return <>{children}</>;
 }
-

@@ -1,7 +1,15 @@
 import { Problem } from './history';
 
 // In-memory server session cache for active interview problems
-const problemSessionMap = new Map<string, { problem: Problem; createdAt: number }>();
+type ProblemSessionRecord = { problem: Problem; createdAt: number };
+type ProblemSessionGlobal = typeof globalThis & {
+  __rehearsalAIProblemSessions?: Map<string, ProblemSessionRecord>;
+};
+
+const globalForProblemSessions = globalThis as ProblemSessionGlobal;
+const problemSessionMap =
+  globalForProblemSessions.__rehearsalAIProblemSessions ||
+  (globalForProblemSessions.__rehearsalAIProblemSessions = new Map());
 
 // Expire sessions older than 3 hours
 const TTL_MS = 3 * 60 * 60 * 1000;

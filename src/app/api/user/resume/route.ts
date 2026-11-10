@@ -39,8 +39,10 @@ export async function POST(req: NextRequest) {
 
     const result = await parseAndSaveResume(buffer, file.name, userId);
 
-    // Score resume with LLM if text was extracted
-    let atsScore = 85;
+    // Score resume with LLM if text was extracted.
+    // Avoid silently inventing a 85/100 score when the model fails; mark the score as unavailable instead.
+    let atsScore = 0;
+    let atsScoreSource = 'unavailable';
     let topChanges: string[] = [];
     let sectionWiseNotes: any = null;
     let rewrittenBullets: any[] = [];
@@ -61,12 +63,17 @@ Return strict JSON matching the schema.`,
           },
         ];
         const { data } = await generateWithSchema(messages, ResumeEvaluationSchema);
-        if (data?.score) atsScore = data.score;
+        if (data?.score !== undefined && data?.score !== null) {
+          atsScore = Number(data.score);
+          atsScoreSource = 'llm';
+        }
         if (data?.topChanges) topChanges = data.topChanges;
         if (data?.sectionWiseNotes) sectionWiseNotes = data.sectionWiseNotes;
         if (data?.rewrittenBullets) rewrittenBullets = data.rewrittenBullets;
       } catch (llmErr) {
         console.warn('Resume LLM scoring fallback:', llmErr);
+        atsScore = 0;
+        atsScoreSource = 'unavailable';
       }
     }
 
@@ -91,6 +98,7 @@ Return strict JSON matching the schema.`,
       resumeText: result.text,
       wordCount: result.wordCount,
       atsScore,
+      atsScoreSource,
       topChanges,
       sectionWiseNotes,
       rewrittenBullets,

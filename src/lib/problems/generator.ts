@@ -84,7 +84,7 @@ async function verifyReferenceSolution(
   testCases: GeneratedProblem['testCases'],
   functionName: string
 ): Promise<{ verifiedOutputs: string[]; success: boolean; error?: string }> {
-  const executableCode = buildExecutableCode(referenceSolutionPython, 'python');
+  const executableCode = buildExecutableCode(referenceSolutionPython, 'python', functionName);
   const verifiedOutputs: string[] = [];
 
   for (let i = 0; i < testCases.length; i++) {
@@ -109,6 +109,13 @@ async function verifyReferenceSolution(
       }
 
       const out = res.stdout.trim();
+      if (!out) {
+        return {
+          verifiedOutputs: [],
+          success: false,
+          error: `Test case ${i + 1} produced no output (the reference method must return a value)`,
+        };
+      }
       verifiedOutputs.push(out);
     } catch (err: any) {
       return {
@@ -168,7 +175,8 @@ PROBLEM REQUIREMENTS (PURE DSA ONLY):
 2. The problem MUST be original and inspired by real interviews.
    DO NOT copy verbatim from LeetCode. NEVER mention LeetCode problem numbers, URLs, or external contest names.
 3. ${isCodeforcesStory ? 'CODEFORCES STORY: Wrap the problem statement in a creative, brief real-world or sci-fi/fantasy story while maintaining 100% rigorous mathematical DSA specifications.' : 'REALISTIC WORKPLACE STORY: Frame the problem as an engineering challenge that would arise at ' + (company || 'a top tech company') + '.'}
-4. RANDOM SEED FOR UNIQUENESS: #${randomSeed}. Ensure this problem is fresh and distinct from standard templates.${previousTitlesStr}
+4. RANDOM SEED FOR UNIQUENESS: #${randomSeed}. Ensure this problem is fresh and distinct from standard templates.
+5. Do not repeat or lightly rephrase any prior problem. Choose a different underlying algorithmic task and title.${previousTitlesStr}
 
 STARTER CODE REQUIREMENTS (LEETCODE STYLE):
 Generate complete starter code for all 5 languages (python, javascript, typescript, cpp, java):
@@ -201,6 +209,7 @@ Generate complete starter code for all 5 languages (python, javascript, typescri
 TEST CASES REQUIREMENTS (EXACTLY 5 CASES):
 - Cases 1, 2, 3: "hidden": false (visible cases for run-code in sandbox: simple, typical, and one edge case).
 - Cases 4, 5: "hidden": true (hidden edge/larger cases for submit verification: boundary cases, negatives, empty/single, or stress cases).
+- Keep every test input small (roughly 12 elements / 30 characters at most) so the whole JSON stays compact and the expected outputs are easy to verify.
 - "input": Must be an array of JSON values in the exact parameter order of functionSpec.params.
   Example: if function is twoSum(nums, target), input must be [[2, 7, 11, 15], 9].
 - "expected": Expected output value.
@@ -209,20 +218,43 @@ TEST CASES REQUIREMENTS (EXACTLY 5 CASES):
   const userPrompt = `Generate a single complete DSA interview problem for Rank: ${rankProfile.rankTier} (${rankProfile.difficulty}), Company: ${company || 'Any company'}.
 Primary topic: ${primaryTopic}. Return strictly valid JSON adhering to the schema.`;
 
+  const MAX_GENERATION_ATTEMPTS = 4;
   let lastError = '';
-  // Try up to 2 times to generate and sandbox-verify the problem
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  const excludedTitles = new Set(previousProblemTitles.map((title) => title.trim().toLowerCase()));
+  for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
     try {
       const messages: any[] = [
         { role: 'system', content: systemPrompt },
         {
           role: 'user',
-          content: attempt === 1 ? userPrompt : `${userPrompt}\n\nNote: Previous attempt had error: ${lastError}. Please ensure referenceSolutionPython compiles and correctly solves all 5 test cases.`,
+          content: attempt === 1
+            ? userPrompt
+            : `${userPrompt}\n\nThe previous generated problem could not be used: ${lastError}. Generate a different problem with a new title. Keep the JSON compact, and ensure the reference solution runs and returns a value for all 5 test cases.`,
         },
       ];
 
-      const res = await generateWithSchema(messages, GeneratedProblemSchema);
+      // A full problem (statement + 5 languages of starter code + 5 tests + reference solution)
+      // is far larger than the 2048-token default, which truncated the JSON and made the first
+      // attempt fail. Give it a big budget and a longer timeout; the outer loop does the retrying.
+      const res = await generateWithSchema(messages, GeneratedProblemSchema, {
+        allowMockFallback: false,
+        maxTokens: 8192,
+        timeoutMs: 60000,
+        temperature: 0.7,
+        maxSchemaAttempts: 1,
+      });
       const generated = res.data;
+
+      // Normalise to exactly 5 tests: first 3 visible, last 2 hidden.
+      generated.testCases = generated.testCases
+        .slice(0, 5)
+        .map((tc, idx) => ({ ...tc, hidden: idx >= 3 }));
+
+      if (excludedTitles.has(generated.title.trim().toLowerCase())) {
+        lastError = `The generated title "${generated.title}" has already been used for this candidate.`;
+        excludedTitles.add(generated.title.trim().toLowerCase());
+        continue;
+      }
 
       // Sandbox Verification: Execute referenceSolutionPython against all 5 test cases
       const verification = await verifyReferenceSolution(
@@ -305,7 +337,7 @@ Primary topic: ${primaryTopic}. Return strictly valid JSON adhering to the schem
     }
   }
 
-  throw new Error(`Failed to generate a verified problem for ${rankTier}: ${lastError}`);
+  throw new Error(`Failed to generate a verified, non-repeating problem for ${rankTier}: ${lastError}`);
 }
 
 export const RANK_TOPIC_SPECS: Record<

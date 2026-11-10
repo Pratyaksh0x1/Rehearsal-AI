@@ -6,17 +6,17 @@ export const TechnicalEvaluationSchema = z.object({
   approach: z.number().min(0).max(100),
   complexityAnalysis: z.number().min(0).max(100),
   communication: z.number().min(0).max(100),
-  englishGrammarFeedback: z.string().describe("Detailed evaluation of candidate's English grammar, spoken fluency, vocabulary, and articulation flow"),
-  grammarMistakes: z.array(z.string()).describe("Specific English grammatical mistakes or awkward phrasings observed in candidate's explanations"),
+  englishGrammarFeedback: z.string().default('').describe("Detailed evaluation of candidate's English grammar, spoken fluency, vocabulary, and articulation flow"),
+  grammarMistakes: z.array(z.string()).default([]).describe("Specific English grammatical mistakes or awkward phrasings observed in candidate's explanations"),
   pauseAnalysis: z.string().optional().describe("Evaluation of candidate's pauses: how long they paused, whether pauses were thoughtful design contemplation or struggle"),
   selfCorrectionAnalysis: z.string().optional().describe("Detailed observation of where the candidate was initially mistaken in logic/code and subsequently self-corrected"),
   codeStyleFeedback: z.string().optional().describe("Critique of coding style, clean code conventions, variable naming, modularity, and language-specific idioms"),
   screenSwitchingInfractions: z.number().optional().describe("Number of screen switching violations detected"),
   conductNotes: z.string().optional().describe("Professional conduct assessment and whether any inappropriate language was used"),
-  feedback: z.string(),
-  timeComplexity: z.string(),
-  spaceComplexity: z.string(),
-  passed: z.boolean(),
+  feedback: z.string().default(''),
+  timeComplexity: z.string().default('Not analysed'),
+  spaceComplexity: z.string().default('Not analysed'),
+  passed: z.boolean().default(false),
 });
 
 export const HREvaluationSchema = z.object({
@@ -90,7 +90,14 @@ export const GeneratedProblemSchema = z.object({
     .string()
     .min(3)
     .describe("Clear, concise title of the DSA problem without LeetCode problem numbers"),
-  difficulty: z.enum(['Easy', 'Medium', 'Hard']),
+  // LLMs often answer "easy" / "HARD"; normalise instead of failing the whole generation.
+  difficulty: z.preprocess(
+    (v) =>
+      typeof v === 'string' && v.trim()
+        ? v.trim().charAt(0).toUpperCase() + v.trim().slice(1).toLowerCase()
+        : v,
+    z.enum(['Easy', 'Medium', 'Hard'])
+  ),
   topics: z
     .array(z.string())
     .min(1)
@@ -115,8 +122,8 @@ export const GeneratedProblemSchema = z.object({
         explanation: z.string().optional().describe("Clear explanation of why this output is produced"),
       })
     )
-    .min(2)
-    .describe("Exactly 2 illustrative examples"),
+    .min(1)
+    .describe("2 illustrative examples"),
   functionSpec: z.object({
     name: z
       .string()
@@ -165,10 +172,12 @@ export const GeneratedProblemSchema = z.object({
           .array(z.any())
           .describe("Ordered array of arguments corresponding exactly to functionSpec.params"),
         expected: z.any().describe("Expected return value matching returnType"),
-        hidden: z.boolean().describe("false for first 3 cases, true for last 2 tricky edge cases"),
+        hidden: z.boolean().optional().default(false).describe("false for first 3 cases, true for last 2 tricky edge cases"),
       })
     )
-    .length(5)
+    // Accept 5-8 and let the generator trim to exactly 5 (3 visible + 2 hidden).
+    .min(5)
+    .max(8)
     .describe(
       "Exactly 5 test cases: first 3 visible (hidden: false), last 2 hidden (hidden: true)"
     ),

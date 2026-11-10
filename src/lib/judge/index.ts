@@ -222,13 +222,9 @@ export async function runTestCases({
     }
 
     const stdoutClean = execRes.stdout.trim();
-    const stdoutLines = stdoutClean.split('\n').map((l) => l.trim()).filter(Boolean);
-    const lastStdoutLine = stdoutLines.length > 0 ? stdoutLines[stdoutLines.length - 1] : '';
 
     const isMatch =
-      execRes.exitCode === 0 &&
-      (compareOutput(stdoutClean, tc.expected_output) ||
-        (lastStdoutLine && compareOutput(lastStdoutLine, tc.expected_output)));
+      execRes.exitCode === 0 && compareOutput(stdoutClean, tc.expected_output);
 
     if (!isMatch) {
       if (execRes.status === 'Time Limit Exceeded') {
@@ -242,7 +238,7 @@ export async function runTestCases({
     }
 
     const actualOutputResolved = isMatch
-      ? (compareOutput(lastStdoutLine, tc.expected_output) ? lastStdoutLine : stdoutClean)
+      ? stdoutClean
       : (stdoutClean || (execRes.stderr ? execRes.stderr.trim() : ''));
 
     testResults.push({

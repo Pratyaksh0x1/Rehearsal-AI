@@ -106,8 +106,8 @@ export interface DetailedInterviewReportProps {
 }
 
 export function DetailedInterviewReport({
-  score = 92,
-  verdict = 'Strong Hire',
+  score = 0,
+  verdict = 'Awaiting result',
   language = 'Python',
   difficulty = 'Medium',
   durationMinutes = 4,
@@ -131,30 +131,8 @@ export function DetailedInterviewReport({
   optimalApproach,
   pacingMetrics,
   integritySummary,
-  whatWentGreat = [
-    {
-      title: 'Every correctness test passed',
-      subtitle: 'All automated tests passed on submission. Correctness',
-    },
-    {
-      title: 'Optimal complexity stated',
-      subtitle: 'Accurately derived asymptotic complexity bounds. Approach',
-    },
-    {
-      title: 'Structured verbal explanation',
-      subtitle: 'Articulated step-by-step logic before writing code. Explaining',
-    },
-  ],
-  needsImprovement = [
-    {
-      title: 'Quiet while coding',
-      subtitle: 'Consider thinking aloud while typing to keep interviewer engaged. Thinking aloud',
-    },
-    {
-      title: 'Variable naming clarity',
-      subtitle: 'Use self-descriptive identifier names in production algorithms. Readability',
-    },
-  ],
+  whatWentGreat = [],
+  needsImprovement = [],
   pauseAnalysis,
   selfCorrectionAnalysis,
   codeStyleFeedback,
@@ -162,7 +140,7 @@ export function DetailedInterviewReport({
   grammarMistakes,
   screenSwitchingInfractions,
   conductNotes,
-  interviewsRemaining = 2,
+  interviewsRemaining,
   onRetake,
 }: DetailedInterviewReportProps) {
   const router = useRouter();
@@ -170,7 +148,7 @@ export function DetailedInterviewReport({
 
   const defaultSummary =
     summaryText ||
-    `The candidate identified a viable algorithmic approach quickly, stated the asymptotic complexities correctly, and passed the automated test suite. Core strengths included structured explanation and algorithmic problem-solving. Growth areas include maintaining active verbal reasoning while coding and handling edge cases with early guard clauses.`;
+    'Interview summary will appear here once the evaluation is generated from the actual code, judge results, and transcript.';
 
   // Radar geometry calculations
   const radarAxes = [
@@ -567,11 +545,11 @@ export function DetailedInterviewReport({
             </span>
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-text-muted">Your Stated Time:</span>
-              <strong className="text-text-primary">{complexityComparison?.userTime || 'O(N)'}</strong>
+              <strong className="text-text-primary">{complexityComparison?.userTime || 'Not recorded'}</strong>
             </div>
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-text-muted">Optimal Target Time:</span>
-              <strong className="text-accent">{complexityComparison?.optimalTime || 'O(N)'}</strong>
+              <strong className="text-accent">{complexityComparison?.optimalTime || 'Not provided'}</strong>
             </div>
           </div>
 
@@ -581,11 +559,11 @@ export function DetailedInterviewReport({
             </span>
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-text-muted">Your Stated Space:</span>
-              <strong className="text-text-primary">{complexityComparison?.userSpace || 'O(1)'}</strong>
+              <strong className="text-text-primary">{complexityComparison?.userSpace || 'Not recorded'}</strong>
             </div>
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-text-muted">Optimal Target Space:</span>
-              <strong className="text-accent">{complexityComparison?.optimalSpace || 'O(1)'}</strong>
+              <strong className="text-accent">{complexityComparison?.optimalSpace || 'Not provided'}</strong>
             </div>
           </div>
         </div>
@@ -662,19 +640,19 @@ export function DetailedInterviewReport({
             <div className="flex items-center justify-between">
               <span className="text-text-muted">Time-to-First-Code:</span>
               <strong className="text-text-primary">
-                {pacingMetrics?.timeToFirstCodeMinutes !== undefined ? `${pacingMetrics.timeToFirstCodeMinutes}m` : '1.5m'}
+                {pacingMetrics?.timeToFirstCodeMinutes !== undefined ? `${pacingMetrics.timeToFirstCodeMinutes}m` : 'Not recorded'}
               </strong>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-text-muted">Debugging & Iteration:</span>
               <strong className="text-text-primary">
-                {pacingMetrics?.debuggingMinutes !== undefined ? `${pacingMetrics.debuggingMinutes}m` : '2.0m'}
+                {pacingMetrics?.debuggingMinutes !== undefined ? `${pacingMetrics.debuggingMinutes}m` : 'Not recorded'}
               </strong>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-text-muted">Thoughtful Pauses:</span>
               <strong className="text-text-primary">
-                {pacingMetrics?.pauseCount !== undefined ? `${pacingMetrics.pauseCount} recorded` : '3 recorded'}
+                {pacingMetrics?.pauseCount !== undefined ? `${pacingMetrics.pauseCount} recorded` : 'Not recorded'}
               </strong>
             </div>
           </div>
@@ -692,13 +670,13 @@ export function DetailedInterviewReport({
               <span className="text-text-muted">Camera & Face Tracking:</span>
               <span className="text-success font-bold flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                {integritySummary?.cameraStatus || 'Face Verified (100%)'}
+                {integritySummary?.cameraStatus || 'Camera status unavailable'}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-text-muted">External Paste Violations:</span>
               <strong className={integritySummary?.pasteViolations ? 'text-danger' : 'text-text-primary'}>
-                {integritySummary?.pasteViolations ?? 0}
+                {integritySummary?.pasteViolations ?? 'Not recorded'}
               </strong>
             </div>
             <div className="flex items-center justify-between">
