@@ -2,11 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
-import { VoicePanel } from '@/components/voice/VoicePanel';
-import { EvaluationModal } from '@/components/interview/EvaluationModal';
+import { VoicePanel, VoiceStateLabel } from '@/components/voice/VoicePanel';
+import { sendChatMessage } from '@/lib/interview/chatClient';
+import { ResumeRoastReportSlideOver } from '@/components/interview/ResumeRoastReportSlideOver';
+import { InterviewReviewModal } from '@/components/interview/InterviewReviewModal';
 import { InterviewTimer, resetInterviewTimer } from '@/components/interview/InterviewTimer';
 import { captureEvent } from '@/lib/analytics/posthog';
 import {
@@ -25,6 +28,7 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { AI_PANELISTS, getRandomAgent, AIPanelist } from '@/config/panels';
+import { AuthGate } from '@/components/auth/AuthGate';
 
 interface RewrittenBullet {
   original: string;
@@ -33,6 +37,9 @@ interface RewrittenBullet {
 
 interface ResumeBrainstormData {
   score: number;
+  accuracyAssessment?: string;
+  candidateStrengths?: string[];
+  resumeImprovements?: string[];
   sectionWiseNotes: {
     summary: string;
     skills: string;
@@ -46,6 +53,15 @@ interface ResumeBrainstormData {
 }
 
 export default function ResumeReviewPage() {
+  return (
+    <AuthGate>
+      <ResumeReviewContent />
+    </AuthGate>
+  );
+}
+
+function ResumeReviewContent() {
+  const router = useRouter();
   const { user } = useAuth();
 
   // Random executive resume strategist selected from 8-agent Gnani catalog (default Nalini)
@@ -53,23 +69,27 @@ export default function ResumeReviewPage() {
 
   const [resumeText, setResumeText] = useState(user?.resumeText || '');
   const [resumeUrl, setResumeUrl] = useState(user?.resumeUrl || '');
-  const [isBrainstorming, setIsBrainstorming] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [brainstormData, setBrainstormData] = useState<ResumeBrainstormData | null>(null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
   // Chat / Argument state
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [showCaptions, setShowCaptions] = useState(false);
+  const [voiceState, setVoiceState] = useState<VoiceStateLabel>('Mic Off');
+  const [volumeLevel, setVolumeLevel] = useState(0);
 
-  // Evaluation modal
-  const [showModal, setShowModal] = useState(false);
+  // Sliding report drawer & review modal
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
   // Initialize random Gnani agent and welcome message
   useEffect(() => {
     const picked = getRandomAgent('resume') || AI_PANELISTS[4];
     setResumePanelist(picked);
 
-    const welcome = `Hello! I'm ${picked.name}, your Executive Resume Strategist at Rehearsal AI. Today, we're going to do an interactive resume brainstorming session. Review or paste your resume text in the editor, and click "Start Resume Brainstorming". I'll analyze your background, suggest high-impact changes (such as replacing passive verbs with quantified engineering metrics), and speak through them with you. When I suggest changes, you can argue or push back anytime — we'll brainstorm the strongest phrasing together!`;
+    const welcome = `Hello! I'm ${picked.name}, your Executive Resume Strategist at Rehearsal AI. I have your resume loaded and ready. Before we finalize your audit report, let's drill into the work you've done. Can you walk me through the most technically challenging project or internship listed on your resume? What was your core architecture, why did you choose that tech stack, and what metrics did you move?`;
 
     setMessages([
       {
@@ -111,70 +131,21 @@ export default function ResumeReviewPage() {
     captureEvent('resume_argument_sent', { agent: resumePanelist.name });
 
     try {
-      const wantsStream = Boolean(options?.onChunk);
-
-      const res = await fetch('/api/interviews/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(wantsStream ? { Accept: 'text/event-stream' } : {}),
-        },
-        signal: options?.signal,
-        body: JSON.stringify({
+      const reply = await sendChatMessage({
+        body: {
           messages: updatedMessages,
           type: 'Resume Review',
-          stream: wantsStream,
           resumeSnippet: resumeText.slice(0, 3000),
           interviewerName: resumePanelist.name,
           interviewerRole: resumePanelist.role,
           interviewerPersonality: resumePanelist.personality,
-        }),
+        },
+        signal: options?.signal,
+        onChunk: options?.onChunk,
+        fallbackReply:
+          'I see your perspective. Let us find an alternative phrasing that highlights your technical ownership without exaggerating metrics.',
       });
 
-      if (wantsStream && res.ok && res.body) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullReply = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const jsonStr = line.slice(6).trim();
-              if (jsonStr) {
-                try {
-                  const parsed = JSON.parse(jsonStr);
-                  if (parsed.token) {
-                    fullReply += parsed.token;
-                    options?.onChunk?.(parsed.token);
-                  } else if (parsed.done && parsed.fullText) {
-                    fullReply = parsed.fullText;
-                  }
-                } catch {
-                  // ignore
-                }
-              }
-            }
-          }
-        }
-
-        const reply =
-          fullReply ||
-          'I see your perspective. Let us find an alternative phrasing that highlights your technical ownership without exaggerating metrics.';
-        setMessages([...updatedMessages, { role: 'assistant', content: reply }]);
-        return reply;
-      }
-
-      const data = await res.json();
-      const reply =
-        data.reply ||
-        'I see your perspective. Let us find an alternative phrasing that highlights your technical ownership without exaggerating metrics.';
       setMessages([...updatedMessages, { role: 'assistant', content: reply }]);
       return reply;
     } catch (err: any) {
@@ -192,11 +163,11 @@ export default function ResumeReviewPage() {
     }
   };
 
-  // Run full LLM resume brainstorm & generate spoken suggestions
-  const handleStartBrainstorming = async () => {
+  // Submit resume & interview discussion for full LLM evaluation
+  const handleSubmitResumeRoast = async () => {
     if (!resumeText.trim()) return;
-    setIsBrainstorming(true);
-    captureEvent('resume_brainstorming_started', { agent: resumePanelist.name });
+    setIsSubmitting(true);
+    captureEvent('resume_roast_submitted', { agent: resumePanelist.name });
 
     try {
       const res = await fetch('/api/interviews/evaluate', {
@@ -205,6 +176,7 @@ export default function ResumeReviewPage() {
         body: JSON.stringify({
           type: 'Resume Review',
           resumeText,
+          conversation: messages,
         }),
       });
 
@@ -212,17 +184,13 @@ export default function ResumeReviewPage() {
       if (data.evaluation) {
         setBrainstormData(data.evaluation);
 
-        // Frame the LLM suggested changes into conversational spoken speech
-        const topItem = data.evaluation.topChanges?.[0] || 'quantify your project achievements';
-        const sampleBullet = data.evaluation.rewrittenBullets?.[0];
-
-        let spokenIntro = `I've analyzed your resume! Here is my initial assessment: Your overall ATS score is ${data.evaluation.score} out of 100. Our top priority is to ${topItem.toLowerCase()}. `;
-
-        if (sampleBullet) {
-          spokenIntro += `For example, instead of "${sampleBullet.original}", I recommend: "${sampleBullet.improved}". How does that feel to you? If you don't have exact metrics or disagree with this rewrite, argue with me and we'll refine it together!`;
-        } else {
-          spokenIntro += `Take a look at the suggested changes on your right. Feel free to push back or argue on any bullet point!`;
+        // Frame the LLM evaluation into conversational spoken speech
+        const score = data.evaluation.score;
+        let spokenIntro = `I've evaluated your project explanations and analyzed your resume! Your overall ATS & defense score is ${score} out of 100. `;
+        if (data.evaluation.accuracyAssessment) {
+          spokenIntro += `${data.evaluation.accuracyAssessment.slice(0, 160)}. `;
         }
+        spokenIntro += `Here is your full audit report with concrete improvements and bullet rewrites.`;
 
         setMessages((prev) => [
           ...prev,
@@ -232,12 +200,14 @@ export default function ResumeReviewPage() {
           },
         ]);
 
-        captureEvent('resume_brainstorming_completed', { score: data.evaluation.score });
+        // Automatically bring up the sliding popup with the report and evaluation
+        setIsReportOpen(true);
+        captureEvent('resume_roast_evaluation_received', { score: data.evaluation.score });
       }
     } catch (err) {
-      console.error('Resume brainstorm error:', err);
+      console.error('Resume submission error:', err);
     } finally {
-      setIsBrainstorming(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -259,7 +229,8 @@ export default function ResumeReviewPage() {
 
   return (
     <div className="min-h-screen bg-bg text-text-primary flex flex-col transition-colors">
-      <Navbar />
+      {/* Hide Navbar during active live interview */}
+      {brainstormData && <Navbar />}
 
       <main className="flex-1 max-w-[1680px] w-full mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
         {/* Top Header Banner */}
@@ -274,14 +245,14 @@ export default function ResumeReviewPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* 45-Minute Interview Countdown Timer */}
-            <InterviewTimer totalMinutes={45} interviewKey="resume" />
+            {/* Exactly 20-Minute Countdown Timer */}
+            <InterviewTimer totalMinutes={20} interviewKey="resume" />
 
             {brainstormData && (
               <button
                 type="button"
-                onClick={() => setShowModal(true)}
-                className="px-4 py-2 rounded-xl bg-bg border border-border hover:bg-surface-hover text-text-primary font-bold text-xs shadow-sm transition-all flex items-center gap-1.5"
+                onClick={() => setIsReportOpen(true)}
+                className="px-4 py-2 rounded-xl bg-bg border border-border hover:bg-surface-hover text-text-primary font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <FileCheck2 className="w-3.5 h-3.5 text-accent" />
                 <span>View Full Audit Report</span>
@@ -290,19 +261,19 @@ export default function ResumeReviewPage() {
 
             <button
               type="button"
-              onClick={handleStartBrainstorming}
-              disabled={isBrainstorming || !resumeText.trim()}
-              className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-hover text-accent-foreground font-bold text-sm shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+              onClick={handleSubmitResumeRoast}
+              disabled={isSubmitting || !resumeText.trim()}
+              className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-hover text-accent-foreground font-bold text-sm shadow-md transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
             >
-              {isBrainstorming ? (
+              {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Brainstorming Changes...</span>
+                  <span>Submitting...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>{brainstormData ? 'Re-Analyze Resume' : 'Start Resume Brainstorming'}</span>
+                  <Send className="w-4 h-4" />
+                  <span>Submit</span>
                 </>
               )}
             </button>
@@ -334,43 +305,123 @@ export default function ResumeReviewPage() {
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent-subtle text-accent border border-accent/20">
-                    Gnani {resumePanelist.model}
+                <div className="flex items-center gap-2">
+                  {/* Captions toggle - off by default */}
+                  <button
+                    type="button"
+                    onClick={() => setShowCaptions(!showCaptions)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-mono flex items-center gap-1 border transition-all ${
+                      showCaptions
+                        ? 'bg-accent/20 border-accent/40 text-accent font-semibold'
+                        : 'bg-bg text-text-muted border-border hover:text-text-primary'
+                    }`}
+                    title="Toggle speech captions"
+                  >
+                    <span>CC</span>
+                    <span>{showCaptions ? 'Captions On' : 'Captions Off'}</span>
+                  </button>
+
+                  <span
+                    className={`text-[10px] font-mono font-semibold px-2.5 py-1 rounded-full border transition-all ${
+                      voiceState === 'Speaking'
+                        ? 'bg-accent/20 border-accent text-accent animate-pulse font-bold'
+                        : voiceState === 'Thinking'
+                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-500 animate-pulse'
+                        : voiceState === 'Heard you'
+                        ? 'bg-teal-500/20 border-teal-400 text-teal-400 animate-pulse'
+                        : voiceState === 'Listening'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                        : 'bg-bg text-text-subtle border-border'
+                    }`}
+                  >
+                    {voiceState}
                   </span>
                 </div>
               </div>
 
-              {/* Debate / Conversation Transcript */}
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                {messages.map((m, idx) => (
+              {/* Voice-First Experience: Hero Strategist Avatar & Sound Aura */}
+              <div className="py-6 px-4 flex flex-col items-center justify-center gap-4 bg-bg/50 rounded-2xl border border-border/60">
+                <div className="relative">
                   <div
-                    key={idx}
-                    className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'
-                      }`}
-                  >
-                    <span className="text-[10px] font-mono text-text-subtle mb-1">
-                      {m.role === 'user' ? 'You (Candidate)' : resumePanelist.name}
-                    </span>
-                    <div
-                      className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${m.role === 'user'
-                          ? 'bg-accent text-accent-foreground'
-                          : 'bg-bg text-text-primary border border-border'
-                        }`}
-                    >
-                      {m.content}
-                    </div>
+                    className={`absolute -inset-3 rounded-full transition-all duration-300 pointer-events-none ${
+                      voiceState === 'Speaking'
+                        ? 'bg-accent/30 blur-xl scale-110 animate-pulse'
+                        : voiceState === 'Thinking'
+                        ? 'bg-amber-400/25 blur-xl scale-105'
+                        : voiceState === 'Heard you' || (voiceState === 'Listening' && volumeLevel > 15)
+                        ? 'bg-emerald-500/30 blur-xl scale-110'
+                        : 'bg-transparent'
+                    }`}
+                  />
+
+                  <div className={`relative w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 transition-all duration-300 shadow-xl ${
+                    voiceState === 'Speaking'
+                      ? 'border-accent ring-4 ring-accent/30 scale-105'
+                      : voiceState === 'Thinking'
+                      ? 'border-amber-400 ring-4 ring-amber-400/30'
+                      : voiceState === 'Heard you' || (voiceState === 'Listening' && volumeLevel > 15)
+                      ? 'border-emerald-400 ring-4 ring-emerald-400/30 scale-105'
+                      : 'border-border ring-1 ring-border'
+                  }`}>
+                    <Image
+                      src={resumePanelist.avatarUrl}
+                      alt={resumePanelist.name}
+                      fill
+                      className="object-cover"
+                      priority
+                    />
                   </div>
-                ))}
-                {isChatLoading && (
-                  <div className="flex items-center gap-2 text-xs text-text-subtle italic">
-                    <span className="inline-block w-2 h-2 rounded-full bg-accent animate-ping" />
-                    {resumePanelist.name} is formulating a response...
-                  </div>
-                )}
+                </div>
+
+                <div className="text-center space-y-1">
+                  <h4 className="font-bold text-base text-text-primary">
+                    {resumePanelist.name}
+                  </h4>
+                  <p className="text-xs text-text-muted font-mono">
+                    {voiceState === 'Speaking'
+                      ? `${resumePanelist.name} is advising out loud...`
+                      : voiceState === 'Thinking'
+                      ? 'Analyzing resume phrasing & metrics...'
+                      : voiceState === 'Heard you'
+                      ? 'Processing your pushback...'
+                      : voiceState === 'Listening'
+                      ? 'Listening for your arguments or ideas...'
+                      : 'Microphone inactive'}
+                  </p>
+                </div>
               </div>
 
-              {/* Live Voice & Audio Controls (Strict No-Barge-In with Automatic Voice Activity Detection) */}
+              {/* Optional Captions Drawer (Only shown when toggled ON) */}
+              {showCaptions && (
+                <div className="space-y-2 max-h-48 overflow-y-auto p-3 rounded-xl bg-bg border border-border text-xs leading-relaxed">
+                  <div className="text-[10px] font-mono text-text-subtle uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Live Captions (Accessibility)</span>
+                    <button
+                      onClick={() => setShowCaptions(false)}
+                      className="hover:underline text-text-muted"
+                    >
+                      Hide
+                    </button>
+                  </div>
+                  {messages.slice(-3).map((m, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-2 rounded-lg ${
+                        m.role === 'user'
+                          ? 'bg-accent/10 border border-accent/20 text-accent font-medium'
+                          : 'bg-surface border border-border text-text-primary'
+                      }`}
+                    >
+                      <strong className="block text-[10px] uppercase font-mono mb-0.5 text-text-muted">
+                        {m.role === 'user' ? 'You' : resumePanelist.name}
+                      </strong>
+                      <p>{m.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Live Voice & Audio Controls */}
               <VoicePanel
                 onSendMessage={handleUserMessage}
                 isProcessing={isChatLoading}
@@ -379,6 +430,10 @@ export default function ResumeReviewPage() {
                 model={resumePanelist.model}
                 voiceId={resumePanelist.voiceId}
                 initialMessage={messages[0]?.content}
+                onStateChange={(state, volume) => {
+                  setVoiceState(state);
+                  setVolumeLevel(volume);
+                }}
               />
 
               {/* Quick Argument Chips */}
@@ -541,10 +596,10 @@ export default function ResumeReviewPage() {
                   <Sparkles className="w-6 h-6" />
                 </div>
                 <h3 className="text-base font-bold text-text-primary">
-                  Ready to Brainstorm Your Resume?
+                  Ready to Audit & Defend Your Resume?
                 </h3>
                 <p className="text-xs text-text-muted max-w-lg mx-auto leading-relaxed">
-                  Paste or review your resume text below and click <strong>&ldquo;Start Resume Brainstorming&rdquo;</strong>. {resumePanelist.name} will analyze your bullet points, identify missing metrics, and speak the suggested changes out loud. You can debate and refine any bullet together.
+                  Paste or review your resume text below and click <strong>&ldquo;Submit&rdquo;</strong>. {resumePanelist.name} will analyze your bullet points, identify missing metrics, and generate your comprehensive audit report. You can also debate and refine any bullet together using live voice.
                 </p>
               </div>
             )}
@@ -589,13 +644,34 @@ export default function ResumeReviewPage() {
         </div>
       </main>
 
-      {/* Scored Evaluation Modal */}
-      <EvaluationModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        type="Resume Review"
+      {/* Sliding Popup with Audit Report and Evaluation */}
+      <ResumeRoastReportSlideOver
+        isOpen={isReportOpen}
+        onClose={() => setIsReportOpen(false)}
         evaluation={brainstormData}
+        strategistName={resumePanelist.name}
+        strategistRole={resumePanelist.role}
+        onContinue={() => {
+          setIsReportOpen(false);
+          setIsReviewModalOpen(true);
+        }}
       />
+
+      {/* Review Modal triggers after user clicks Continue on the report */}
+      {isReviewModalOpen && (
+        <InterviewReviewModal
+          isOpen={isReviewModalOpen}
+          interviewerName={resumePanelist.name}
+          onSubmitReview={() => {
+            setIsReviewModalOpen(false);
+            router.push('/home');
+          }}
+          onSkip={() => {
+            setIsReviewModalOpen(false);
+            router.push('/home');
+          }}
+        />
+      )}
 
       <Footer />
     </div>

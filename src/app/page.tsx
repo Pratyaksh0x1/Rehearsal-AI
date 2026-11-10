@@ -11,6 +11,7 @@ import { Footer } from '@/components/layout/Footer';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { DeviceMockupAnimation } from '@/components/home/DeviceMockupAnimation';
 import { captureEvent } from '@/lib/analytics/posthog';
+import { isUserOnboarded } from '@/lib/user';
 import {
   Mic,
   Code,
@@ -40,7 +41,7 @@ function LandingPageContent() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      if (user.isOnboarded) {
+      if (isUserOnboarded(user)) {
         router.push('/home');
       } else {
         router.push('/onboarding');
@@ -65,7 +66,7 @@ function LandingPageContent() {
     <div className="min-h-screen bg-bg text-text-primary flex flex-col transition-colors selection:bg-accent/30">
       {/* 1. Cylindrical Glassmorphism Header */}
       <header className="sticky top-3.5 z-50 w-full px-4 sm:px-6 pointer-events-none">
-        <div className="pointer-events-auto max-w-5xl mx-auto h-13 rounded-full backdrop-blur-2xl bg-surface/90 dark:bg-[#0b0f19]/80 border border-border dark:border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.35)] px-4 sm:px-6 flex items-center justify-between transition-all">
+        <div className="pointer-events-auto max-w-5xl mx-auto h-13 rounded-full backdrop-blur-2xl bg-surface/90 border border-border shadow-[0_12px_36px_rgba(0,0,0,0.08)] px-4 sm:px-6 flex items-center justify-between transition-all">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group flex-shrink-0">
             <div className="relative w-7 h-7 flex-shrink-0">

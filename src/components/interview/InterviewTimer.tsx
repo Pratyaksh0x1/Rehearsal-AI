@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Clock, AlertTriangle } from 'lucide-react';
 
 interface InterviewTimerProps {
-  /** Duration of interview in minutes (defaults to 45 mins) */
+  /** Duration of interview in minutes (defaults to 20 mins) */
   totalMinutes?: number;
   /** Storage key to persist countdown across refreshes */
   interviewKey?: string;
@@ -14,7 +14,7 @@ interface InterviewTimerProps {
 }
 
 export function InterviewTimer({
-  totalMinutes = 45,
+  totalMinutes = 20,
   interviewKey = 'technical',
   onTimeUp,
   className = '',
@@ -80,7 +80,7 @@ export function InterviewTimer({
             ? 'bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-300 animate-pulse'
             : isWarning
               ? 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300'
-              : 'bg-surface border-border text-text-primary dark:bg-[#18152e]/90 dark:border-white/15 dark:text-white/95'
+              : 'bg-surface border-border text-text-primary'
       } ${className}`}
       title={`Interview duration: ${totalMinutes} minutes`}
     >
@@ -111,4 +111,3 @@ export function resetInterviewTimer(interviewKey: string = 'technical') {
     // ignore
   }
 }
-

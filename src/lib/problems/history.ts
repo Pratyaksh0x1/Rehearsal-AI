@@ -1,9 +1,7 @@
 import { db, isDatabaseConfigured } from '@/db';
 import { problems, problemAttempts } from '@/db/schema';
 import { eq, desc, and } from 'drizzle-orm';
-import localProblems from '@/data/problems.json';
-import * as fs from 'fs';
-import * as path from 'path';
+import { getFallbackProblemForRank } from './generator';
 
 export interface TestCase {
   input: string;
@@ -14,9 +12,9 @@ export interface TestCase {
 export interface Problem {
   id: string;
   source: string;
-  externalId: string;
+  externalId?: string;
   title: string;
-  url: string;
+  url?: string;
   difficulty: string;
   topics: string[];
   rankTier: string;
@@ -25,101 +23,41 @@ export interface Problem {
   examples?: Array<{ input: string; output: string; explanation?: string }>;
   constraints?: string[];
   starter_code?: { python: string; javascript: string; cpp: string; java: string };
+  starterCode?: { python: string; javascript: string; typescript?: string; cpp: string; java: string };
   test_cases?: TestCase[];
   hints?: string[];
   optimal_complexity?: { time: string; space: string };
 }
 
-const PROBLEMS_DIR = path.join(process.cwd(), 'src/data/problems');
-
 /**
  * Enriches a basic Problem entity with full specifications, examples,
- * starter code, and test cases (3 visible + 2 hidden).
+ * starter code, and test cases.
  */
 export function enrichProblemWithDetails(p: Problem): Problem {
-  try {
-    if (fs.existsSync(PROBLEMS_DIR)) {
-      // 1. Direct slug match
-      const directPath = path.join(PROBLEMS_DIR, `${p.externalId}.json`);
-      if (fs.existsSync(directPath)) {
-        const data = JSON.parse(fs.readFileSync(directPath, 'utf-8'));
-        return { ...p, ...data, company_tags: data.company_tags || p.company_tags };
-      }
-
-      // 2. Search by title slug
-      const slugName = p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const files = fs.readdirSync(PROBLEMS_DIR);
-      for (const file of files) {
-        if (file.includes(slugName) || file.includes(p.externalId.toLowerCase())) {
-          const fullPath = path.join(PROBLEMS_DIR, file);
-          const data = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
-          return { ...p, ...data, company_tags: data.company_tags || p.company_tags };
-        }
-      }
-    }
-  } catch (err) {
-    console.warn(`Could not read problem details for ${p.title}:`, err);
+  // If problem is already fully specified by the dynamic LLM generator, return directly
+  if (p.description && (p.starter_code || (p as any).starterCode) && p.test_cases?.length) {
+    return {
+      ...p,
+      source: p.source || 'Rehearsal AI',
+      hints: [],
+    };
   }
 
-  // Fallback defaults for standard LeetCode problems
-  const localMatch = (localProblems as any[]).find(
-    (lp) =>
-      lp.id === p.id ||
-      lp.externalId === p.externalId ||
-      lp.title?.toLowerCase() === p.title?.toLowerCase()
-  );
-  const resolvedCompanyTags =
-    p.company_tags || localMatch?.company_tags || ['Google', 'Meta', 'Amazon'];
-
-  const fallbackTestCases: TestCase[] = [
-    { input: '[2, 7, 11, 15], 9', expected_output: '[0, 1]', is_hidden: false },
-    { input: '[3, 2, 4], 6', expected_output: '[1, 2]', is_hidden: false },
-    { input: '[3, 3], 6', expected_output: '[0, 1]', is_hidden: false },
-    { input: '[-1, -2, -3, -4, -5], -8', expected_output: '[2, 4]', is_hidden: true },
-    { input: '[1000000000, 500000000, 500000000], 1000000000', expected_output: '[1, 2]', is_hidden: true },
-  ];
+  // Fallback rank problem
+  const fallback = getFallbackProblemForRank(p.rankTier || 'Bronze', p.topics?.[0] || 'algorithms');
 
   return {
     ...p,
-    company_tags: resolvedCompanyTags,
-    description:
-      p.description ||
-      `Given an array of integers \`nums\` and an integer \`target\`, return **indices of the two numbers** such that they add up to \`target\`.
-
-You may assume that each input would have **exactly one solution**, and you may not use the same element twice.
-
-You can return the answer in any order.`,
-    examples: p.examples || [
-      {
-        input: 'nums = [2, 7, 11, 15], target = 9',
-        output: '[0, 1]',
-        explanation: 'Because nums[0] + nums[1] == 2 + 7 == 9, we return [0, 1].',
-      },
-      {
-        input: 'nums = [3, 2, 4], target = 6',
-        output: '[1, 2]',
-        explanation: 'Because nums[1] + nums[2] == 2 + 4 == 6, we return [1, 2].',
-      },
-      {
-        input: 'nums = [3, 3], target = 6',
-        output: '[0, 1]',
-        explanation: 'Because nums[0] + nums[1] == 3 + 3 == 6, we return [0, 1].',
-      },
-    ],
-    constraints: p.constraints || [
-      '2 <= nums.length <= 10^4',
-      '-10^9 <= nums[i] <= 10^9',
-      '-10^9 <= target <= 10^9',
-      'Only one valid answer exists.',
-    ],
-    starter_code: p.starter_code || {
-      python: 'class Solution:\n    def solve(self, nums: list[int], target: int) -> list[int]:\n        pass\n',
-      javascript: '/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nfunction solve(nums, target) {\n    \n}\n',
-      cpp: '#include <vector>\nusing namespace std;\n\nclass Solution {\npublic:\n    vector<int> solve(vector<int>& nums, int target) {\n        \n    }\n};\n',
-      java: 'class Solution {\n    public int[] solve(int[] nums, int target) {\n        return new int[0];\n    }\n}\n',
-    },
-    test_cases: p.test_cases || fallbackTestCases,
-    hints: p.hints || [],
+    title: p.title || fallback.title,
+    description: p.description || fallback.description,
+    examples: p.examples || fallback.examples,
+    constraints: p.constraints || fallback.constraints,
+    starter_code: p.starter_code || (p as any).starterCode || fallback.starter_code,
+    test_cases: p.test_cases || fallback.test_cases,
+    hints: [],
+    company_tags: p.company_tags || fallback.company_tags || ['General'],
+    source: p.source || 'Rehearsal AI',
+    url: '',
   };
 }
 
@@ -237,8 +175,12 @@ export async function getCandidateProblemHistory(
     const allProblems = await getAllProblems();
     const problemMap = new Map<string, Problem>();
     for (const p of allProblems) {
-      problemMap.set(`${p.source}_${p.externalId}`, p);
-      problemMap.set(p.externalId, p);
+      if (p.externalId) {
+        problemMap.set(`${p.source}_${p.externalId}`, p);
+        problemMap.set(p.externalId, p);
+      }
+      if (p.id) problemMap.set(p.id, p);
+      if (p.title) problemMap.set(p.title, p);
     }
 
     return attempts.map((att) => {
@@ -278,14 +220,11 @@ export async function getProblemsByTier(tier: string): Promise<Problem[]> {
         return rows as Problem[];
       }
     } catch (err) {
-      console.warn('DB error fetching tier problems, falling back to dataset:', err);
+      console.warn('DB error fetching tier problems, falling back to rank generator:', err);
     }
   }
 
-  // Fallback to static seed dataset
-  return (localProblems as Problem[]).filter(
-    (p) => normalizeTier(p.rankTier) === normalized
-  );
+  return [getFallbackProblemForRank(normalized)];
 }
 
 /**
@@ -299,10 +238,13 @@ export async function getAllProblems(): Promise<Problem[]> {
         return rows as Problem[];
       }
     } catch (err) {
-      console.warn('DB error fetching all problems, using local problems:', err);
+      console.warn('DB error fetching all problems, using rank fallbacks:', err);
     }
   }
-  return localProblems as Problem[];
+
+  return ['Bronze', 'Gold', 'Platinum', 'Diamond', 'Crown', 'Conqueror'].map((t) =>
+    getFallbackProblemForRank(t)
+  );
 }
 
 /**
@@ -358,11 +300,11 @@ export async function getNextProblemForCandidate(options: {
   if (!candidatePool || candidatePool.length === 0) {
     // Ultimate fallback if no problems exist in tier
     const fallbackProblem: Problem = {
-      id: 'lc-1',
-      source: 'LeetCode',
+      id: 'dsa-1',
+      source: 'Rehearsal DSA',
       externalId: '1',
       title: 'Two Sum',
-      url: 'https://leetcode.com/problems/two-sum/',
+      url: '',
       difficulty: 'Easy',
       topics: ['Arrays', 'Hashing'],
       rankTier: 'Bronze',
@@ -470,7 +412,7 @@ export async function recordCandidateAttempt(params: {
       id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       userId: params.userId,
       interviewId: params.interviewId || null,
-      source: params.problem.source || 'LeetCode',
+      source: params.problem.source || 'Rehearsal DSA',
       externalId: String(params.problem.externalId),
       difficulty: params.problem.difficulty || 'Medium',
       solved: params.solved,

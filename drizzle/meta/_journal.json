@@ -8,6 +8,13 @@
       "when": 1794130077081,
       "tag": "0000_demonic_owl",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794209773642,
+      "tag": "0001_curly_steel_serpent",
+      "breakpoints": true
     }
   ]
 }

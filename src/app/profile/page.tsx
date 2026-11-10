@@ -17,13 +17,32 @@ import {
   Calendar,
   Award,
   Sparkles,
+  Edit3,
+  Check,
+  X,
 } from 'lucide-react';
+import { AuthGate } from '@/components/auth/AuthGate';
+import { toast } from '@/components/ui';
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  return (
+    <AuthGate>
+      <ProfileContent />
+    </AuthGate>
+  );
+}
+
+function ProfileContent() {
+  const { user, updateUser } = useAuth();
 
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Name editing state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
+  const [nameUpdateError, setNameUpdateError] = useState('');
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
 
   // Resume re-upload state
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -57,6 +76,28 @@ export default function ProfilePage() {
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  const handleSaveName = async () => {
+    if (!editNameValue.trim()) return;
+    setIsUpdatingName(true);
+    setNameUpdateError('');
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: editNameValue.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update name');
+      setIsEditingName(false);
+      updateUser({ username: editNameValue.trim() });
+      await fetchProfile();
+    } catch (err: any) {
+      setNameUpdateError(err.message || 'Error updating name');
+    } finally {
+      setIsUpdatingName(false);
+    }
+  };
 
   // Handle Resume Re-upload
   const handleResumeUpload = async (e: React.FormEvent) => {
@@ -114,7 +155,7 @@ export default function ProfilePage() {
       setReportDescription('');
       captureEvent('problem_report_submitted', { category: reportCategory });
     } catch (err: any) {
-      alert(err.message || 'Error sending report.');
+      toast.error(err.message || 'Error sending report.');
     } finally {
       setIsSubmittingReport(false);
     }
@@ -144,9 +185,64 @@ export default function ProfilePage() {
               <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-accent-subtle text-accent text-xs font-mono font-bold uppercase tracking-wider mb-2">
                 Candidate Profile
               </div>
-              <h1 className="text-3xl font-black text-text-primary">
-                {profileUser?.username || profileUser?.name || 'Candidate'}
-              </h1>
+
+              {isEditingName ? (
+                <div className="space-y-2 mt-1">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      className="px-3 py-1 text-lg font-bold bg-bg border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+                      placeholder="Your name"
+                      maxLength={24}
+                    />
+                    <button
+                      onClick={handleSaveName}
+                      disabled={isUpdatingName}
+                      className="p-1.5 rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors"
+                      title="Save name"
+                    >
+                      {isUpdatingName ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingName(false);
+                        setNameUpdateError('');
+                      }}
+                      className="p-1.5 rounded-lg bg-bg-subtle text-text-muted hover:text-text-primary transition-colors"
+                      title="Cancel"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {nameUpdateError && (
+                    <p className="text-xs text-red-500">{nameUpdateError}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <h1 className="text-3xl font-black text-text-primary">
+                    {profileUser?.username || profileUser?.name || 'Candidate'}
+                  </h1>
+                  <button
+                    onClick={() => {
+                      setEditNameValue(profileUser?.username || profileUser?.name || '');
+                      setIsEditingName(true);
+                      setNameUpdateError('');
+                    }}
+                    className="p-1 rounded-md text-text-subtle hover:text-accent transition-colors"
+                    title="Edit candidate name"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <p className="text-xs sm:text-sm text-text-muted font-mono mt-1">
                 {profileUser?.email || 'candidate@example.com'}
               </p>
@@ -300,6 +396,15 @@ export default function ProfilePage() {
                       <span className="text-xs font-mono text-accent bg-accent-subtle px-2 py-0.5 rounded">
                         Score: {int.score}/100
                       </span>
+                      {int.type === 'Technical' &&
+                        (int.feedbackJson?.passed ||
+                          (int.feedbackJson?.totalTests &&
+                            int.feedbackJson?.passedTests === int.feedbackJson?.totalTests)) && (
+                          <span className="text-[11px] font-mono text-success bg-success-subtle border border-success/30 px-2 py-0.5 rounded font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-success" />
+                            <span>Problem Solved</span>
+                          </span>
+                        )}
                     </div>
                     <span className="text-xs text-text-subtle font-mono">
                       {new Date(int.startedAt).toLocaleDateString()} at{' '}

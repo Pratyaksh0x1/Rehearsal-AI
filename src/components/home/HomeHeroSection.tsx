@@ -1,10 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Mic, ArrowRight } from 'lucide-react';
 import { captureEvent } from '@/lib/analytics/posthog';
+import { getNextRankProgress, RANKS, RankTier } from '@/config/ranks';
+import { AllRanksModal } from '@/components/ranks/AllRanksModal';
 
 interface HomeHeroSectionProps {
   userRank?: string;
@@ -13,37 +15,45 @@ interface HomeHeroSectionProps {
 }
 
 export function HomeHeroSection({
-  userRank = 'Soldier',
+  userRank,
   points = 100,
 }: HomeHeroSectionProps) {
-  // Normalize rank naming: map Bronze -> Soldier, Gold -> Knight, etc.
-  const rankDisplay =
-    userRank.toLowerCase() === 'bronze'
-      ? 'SOLDIER'
-      : userRank.toLowerCase() === 'gold'
-        ? 'KNIGHT'
-        : userRank.toUpperCase();
+  const [isRanksModalOpen, setIsRanksModalOpen] = useState(false);
 
-  const nextRank =
-    rankDisplay === 'SOLDIER'
-      ? 'Knight'
-      : rankDisplay === 'KNIGHT'
-        ? 'Commander'
-        : 'Next Rank';
+  const currentPoints = typeof points === 'number' && !isNaN(points) ? points : 100;
 
-  const currentPoints = points || 100;
-  const targetPoints = rankDisplay === 'SOLDIER' ? 200 : currentPoints + 150;
-  const pointsRemaining = Math.max(0, targetPoints - currentPoints);
-  const progressPercent = Math.min(100, Math.round((currentPoints / targetPoints) * 100));
+  // Accurate dynamic rank calculation from unified ranks configuration
+  const progressInfo = getNextRankProgress(currentPoints);
+  const currentTier: RankTier = progressInfo.currentTier;
+  const nextTier: RankTier | null = progressInfo.nextTier;
+
+  const currentRankDef = RANKS[currentTier];
+  const nextRankDef = nextTier ? RANKS[nextTier] : null;
+
+  const pointsRemaining = progressInfo.pointsNeededForNext;
+  const progressPercent = progressInfo.percentage;
+
+  const shadowColor =
+    currentTier === 'Bronze'
+      ? 'rgba(180, 83, 9, 0.35)'
+      : currentTier === 'Gold'
+      ? 'rgba(245, 158, 11, 0.4)'
+      : currentTier === 'Platinum'
+      ? 'rgba(56, 189, 248, 0.4)'
+      : currentTier === 'Diamond'
+      ? 'rgba(6, 182, 212, 0.45)'
+      : currentTier === 'Crown'
+      ? 'rgba(168, 85, 247, 0.45)'
+      : 'rgba(239, 68, 68, 0.5)';
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-10">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         {/* Left Column: Headline, Voice Orb Waveform, CTA */}
         <div className="lg:col-span-7 space-y-6">
-          <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-serif font-black tracking-tight text-text-primary dark:text-white leading-[1.14]">
+          <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-serif font-black tracking-tight text-text-primary leading-[1.14]">
             The moment you enter the environment,{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-fuchsia-600 to-indigo-600 dark:from-purple-300 dark:via-fuchsia-200 dark:to-white">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent via-accent-hover to-accent">
               your interviewer is ready.
             </span>
           </h1>
@@ -52,10 +62,10 @@ export function HomeHeroSection({
           <div className="flex items-center gap-4 py-2">
             {/* Glowing Orb */}
             <div className="relative flex-shrink-0">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 via-fuchsia-400 to-indigo-200 shadow-[0_0_24px_rgba(192,132,252,0.85)] flex items-center justify-center animate-pulse">
+              <div className="w-9 h-9 rounded-full bg-accent shadow-[0_0_24px_rgba(59,130,246,0.65)] flex items-center justify-center animate-pulse">
                 <div className="w-4 h-4 rounded-full bg-white/90 blur-[1px]" />
               </div>
-              <div className="absolute inset-0 rounded-full ring-4 ring-purple-400/30 animate-ping opacity-60" />
+              <div className="absolute inset-0 rounded-full ring-4 ring-accent/30 animate-ping opacity-60" />
             </div>
 
             {/* Audio Waveform Bars */}
@@ -66,7 +76,7 @@ export function HomeHeroSection({
               ].map((height, i) => (
                 <span
                   key={i}
-                  className="w-1 rounded-full bg-gradient-to-t from-purple-600 via-fuchsia-500 to-indigo-500 dark:from-purple-500/70 dark:via-fuchsia-300 dark:to-white transition-all duration-300"
+                  className="w-1 rounded-full bg-accent transition-all duration-300"
                   style={{
                     height: `${height * 0.45}px`,
                     animation: `pulse-glow 2.2s ease-in-out infinite`,
@@ -87,14 +97,14 @@ export function HomeHeroSection({
             <Link
               href="/interview"
               onClick={() => captureEvent('hero_start_interview_clicked')}
-              className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-full bg-[#d8b4fe] hover:bg-[#c084fc] text-neutral-950 font-bold text-sm shadow-[0_0_30px_rgba(216,180,254,0.4)] transition-all hover:scale-105 active:scale-95"
+              className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-full bg-accent hover:bg-accent-hover text-accent-foreground font-semibold text-sm shadow-sm transition-all hover:scale-105 active:scale-95"
             >
-              <Mic className="w-4 h-4 text-neutral-950" />
+              <Mic className="w-4 h-4 text-accent-foreground" />
               <span>Start interview</span>
             </Link>
 
             <div className="flex flex-col text-left">
-              <span className="text-xs font-bold text-text-primary dark:text-white tracking-wide">
+              <span className="text-xs font-bold text-text-primary tracking-wide">
                 Your free interview
               </span>
               <span className="text-xs text-text-muted">Technical, any format</span>
@@ -102,25 +112,22 @@ export function HomeHeroSection({
           </div>
         </div>
 
-        {/* Right Column: 10,000+ Pill & "Your rank" Card */}
+        {/* Right Column: Pill & "Your rank" Card */}
         <div className="lg:col-span-5 flex flex-col items-start lg:items-end space-y-3">
-          {/* Top Pill Counter */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-surface border border-border dark:bg-white/5 dark:border-white/10 backdrop-blur-md text-xs text-purple-700 dark:text-purple-200 font-mono shadow-sm">
-            <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
-            <span>10,000+ students practised</span>
-          </div>
+          {/* Your Rank Card */}
+          <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-6 sm:p-7 shadow-sm relative overflow-hidden transition-all">
+            {/* Ambient Accent Background Glow */}
+            <div className="absolute -right-16 -top-16 w-52 h-52 rounded-full bg-accent-subtle blur-3xl pointer-events-none" />
 
-          {/* Your Rank Luxury Card */}
-          <div className="w-full max-w-md bg-surface border border-border dark:bg-[#161426]/90 dark:border-white/10 rounded-3xl p-6 sm:p-7 shadow-xl dark:shadow-2xl relative overflow-hidden backdrop-blur-2xl transition-all">
-            {/* Ambient Purple Background Glow */}
-            <div className="absolute -right-16 -top-16 w-52 h-52 rounded-full bg-purple-500/10 dark:bg-purple-600/20 blur-3xl pointer-events-none" />
-
-            {/* Top row: 3D Rank Shield + Info */}
+            {/* Top row: Official SVG Rank Badge + Info */}
             <div className="flex items-center gap-4 mb-6">
-              <div className="relative w-20 h-20 sm:w-22 sm:h-22 flex-shrink-0 drop-shadow-[0_10px_20px_rgba(205,127,50,0.35)]">
+              <div
+                className="relative w-20 h-20 sm:w-22 sm:h-22 flex-shrink-0"
+                style={{ filter: `drop-shadow(0 10px 20px ${shadowColor})` }}
+              >
                 <Image
-                  src="/ranks/bronze.svg"
-                  alt="Soldier Rank Emblem"
+                  src={currentRankDef.badgeUrl}
+                  alt={`${currentRankDef.displayName} Rank Emblem`}
                   fill
                   className="object-contain"
                   priority
@@ -131,59 +138,74 @@ export function HomeHeroSection({
                 <span className="text-[11px] font-mono uppercase tracking-wider text-text-subtle font-bold block">
                   Your rank
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-serif font-black tracking-wider text-text-primary dark:text-white">
-                  {rankDisplay}
+                <h2 className="text-2xl sm:text-3xl font-serif font-black tracking-wider text-text-primary">
+                  {currentRankDef.displayName.toUpperCase()}
                 </h2>
                 <p className="text-xs text-text-muted leading-relaxed line-clamp-2">
-                  Fresh recruit. You know the basics; now learn to think out loud.
+                  {currentRankDef.description}
                 </p>
               </div>
             </div>
 
-            {/* Points & Progress Bar */}
-            <div className="space-y-2 pt-2 border-t border-border dark:border-white/10">
+            {/* Points & Accurate Progress Bar */}
+            <div className="space-y-2 pt-2 border-t border-border">
               <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-text-primary dark:text-white/90 font-medium">
-                  {pointsRemaining} points to {nextRank}
+                <span className="text-text-primary font-medium">
+                  {nextRankDef ? (
+                    `${pointsRemaining} points to ${nextRankDef.displayName}`
+                  ) : (
+                    'Maximum Rank Tier Achieved'
+                  )}
                 </span>
                 <span className="text-text-subtle font-bold">
-                  {currentPoints} / {targetPoints}
+                  {currentPoints} / {nextRankDef ? (nextRankDef.pointsRequired as number) : (currentRankDef.pointsRequired as number)} pts
                 </span>
               </div>
 
               {/* Progress Bar Track with Next Rank Icon */}
               <div className="relative flex items-center">
-                <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-2.5 overflow-hidden">
+                <div className="w-full bg-surface-hover border border-border/50 rounded-full h-2.5 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-purple-500 via-fuchsia-400 to-indigo-400 rounded-full transition-all duration-500 shadow-[0_0_12px_rgba(192,132,252,0.8)]"
+                    className="h-full bg-accent rounded-full transition-all duration-500 shadow-sm"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
-                <div className="absolute -right-1 -top-2 w-6 h-6 rounded-full overflow-hidden flex items-center justify-center opacity-85">
-                  <Image
-                    src="/ranks/swords.svg"
-                    alt="Next Rank Icon"
-                    width={20}
-                    height={20}
-                    className="object-contain drop-shadow"
-                  />
-                </div>
+                {nextRankDef && (
+                  <div className="absolute -right-1 -top-2 w-6 h-6 rounded-full overflow-hidden flex items-center justify-center opacity-90 drop-shadow">
+                    <Image
+                      src={nextRankDef.badgeUrl}
+                      alt={`${nextRankDef.displayName} Rank Icon`}
+                      width={20}
+                      height={20}
+                      className="object-contain"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Bottom Link */}
-            <div className="pt-4 mt-1">
-              <Link
-                href="/leaderboard"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:text-purple-800 dark:text-purple-300 dark:hover:text-white transition-colors group"
+            {/* Bottom Link: opens popup displaying all rank images */}
+            <div className="pt-4 mt-1 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setIsRanksModalOpen(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent hover:text-accent-hover transition-colors group cursor-pointer focus-ring rounded-md py-1"
               >
-                <span>See all five ranks</span>
+                <span>See all six ranks</span>
                 <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
-              </Link>
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Interactive Modal displaying all six ranks */}
+      <AllRanksModal
+        isOpen={isRanksModalOpen}
+        onClose={() => setIsRanksModalOpen(false)}
+        currentRank={currentTier}
+        points={currentPoints}
+      />
     </section>
   );
 }

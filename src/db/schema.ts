@@ -24,6 +24,7 @@ export const users = pgTable(
     hrPoints: integer('hr_points').default(0).notNull(),
     resumeUrl: text('resume_url'),
     resumeText: text('resume_text'),
+    onboardedAt: timestamp('onboarded_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => ({
@@ -114,6 +115,7 @@ export const reviews = pgTable('reviews', {
   id: varchar('id', { length: 64 }).primaryKey(),
   name: varchar('name', { length: 128 }).notNull(),
   text: text('text').notNull(),
+  rating: integer('rating').default(5),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

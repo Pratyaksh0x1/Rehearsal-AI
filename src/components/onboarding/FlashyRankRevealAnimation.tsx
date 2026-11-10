@@ -1,342 +1,197 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
-import confetti from 'canvas-confetti';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Sparkles, Trophy, Shield, ArrowRight, Zap, CheckCircle2 } from 'lucide-react';
+import confetti from 'canvas-confetti';
+import { Sparkles, ArrowRight, CheckCircle2, ChevronRight, TrendingUp, Trophy, Award } from 'lucide-react';
+import { RANKS, RANK_ORDER, RankTier } from '@/config/ranks';
 
 interface FlashyRankRevealAnimationProps {
   username?: string;
+  assignedRank?: RankTier;
   onEnterArena: () => void;
 }
 
 export function FlashyRankRevealAnimation({
-  username = 'Recruit',
+  username = 'Candidate',
+  assignedRank = 'Bronze',
   onEnterArena,
 }: FlashyRankRevealAnimationProps) {
-  const mountRef = useRef<HTMLDivElement>(null);
   const [showContent, setShowContent] = useState(false);
+  const currentDef = RANKS[assignedRank] || RANKS.Bronze;
 
   useEffect(() => {
-    // 1. Trigger celebratory multi-burst golden fireworks
-    const triggerConfetti = () => {
-      // Center burst
-      confetti({
-        particleCount: 100,
-        spread: 80,
-        origin: { y: 0.5 },
-        colors: ['#f59e0b', '#fbbf24', '#d97706', '#cd7f32', '#a855f7'],
-        disableForReducedMotion: true,
-      });
+    // Subtle, tasteful celebratory burst
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.5 },
+      colors: ['#f59e0b', '#3b82f6', '#10b981', '#6366f1'],
+      disableForReducedMotion: true,
+    });
 
-      // Left cannon
-      setTimeout(() => {
-        confetti({
-          particleCount: 60,
-          angle: 60,
-          spread: 60,
-          origin: { x: 0.1, y: 0.6 },
-          colors: ['#f59e0b', '#fbbf24', '#ffffff', '#cd7f32'],
-        });
-      }, 350);
-
-      // Right cannon
-      setTimeout(() => {
-        confetti({
-          particleCount: 60,
-          angle: 120,
-          spread: 60,
-          origin: { x: 0.9, y: 0.6 },
-          colors: ['#f59e0b', '#fbbf24', '#ffffff', '#cd7f32'],
-        });
-      }, 700);
-    };
-
-    triggerConfetti();
-
-    // Reveal UI cards with slight delay for dramatic effect
-    const contentTimer = setTimeout(() => {
+    const timer = setTimeout(() => {
       setShowContent(true);
-    }, 400);
+    }, 250);
 
-    // 2. Initialize Three.js 3D Animated Scene
-    const container = mountRef.current;
-    if (!container) return;
-
-    const width = container.clientWidth || window.innerWidth;
-    const height = container.clientHeight || 480;
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.z = 7;
-
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
-
-    // 3D Metallic Shield / Emblem Geometry
-    // We create an extruded faceted shield shape
-    const shieldShape = new THREE.Shape();
-    shieldShape.moveTo(0, 1.6);
-    shieldShape.lineTo(1.1, 1.2);
-    shieldShape.lineTo(1.2, 0.1);
-    shieldShape.lineTo(0.7, -1.0);
-    shieldShape.lineTo(0, -1.6);
-    shieldShape.lineTo(-0.7, -1.0);
-    shieldShape.lineTo(-1.2, 0.1);
-    shieldShape.lineTo(-1.1, 1.2);
-    shieldShape.closePath();
-
-    const extrudeSettings = {
-      depth: 0.25,
-      bevelEnabled: true,
-      bevelSegments: 4,
-      steps: 1,
-      bevelSize: 0.1,
-      bevelThickness: 0.1,
-    };
-
-    const shieldGeo = new THREE.ExtrudeGeometry(shieldShape, extrudeSettings);
-    shieldGeo.center();
-
-    // Metallic Bronze / Burnished Gold Material
-    const shieldMat = new THREE.MeshStandardMaterial({
-      color: 0xcd7f32,
-      roughness: 0.25,
-      metalness: 0.85,
-      emissive: 0x4a2a10,
-      emissiveIntensity: 0.3,
-    });
-
-    const shieldMesh = new THREE.Mesh(shieldGeo, shieldMat);
-    scene.add(shieldMesh);
-
-    // Inner Emblem Bevel / Trim
-    const innerRingGeo = new THREE.TorusGeometry(1.0, 0.04, 16, 64);
-    const innerRingMat = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b,
-      roughness: 0.15,
-      metalness: 0.95,
-      emissive: 0x8a4b08,
-      emissiveIntensity: 0.5,
-    });
-    const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
-    innerRing.position.z = 0.2;
-    scene.add(innerRing);
-
-    // 3. Swirling 3D Particle Vortex (1,000 glowing particle stars)
-    const particleCount = 1200;
-    const particleGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    const colors = new Float32Array(particleCount * 3);
-
-    const goldColor = new THREE.Color(0xfbbf24);
-    const bronzeColor = new THREE.Color(0xcd7f32);
-    const purpleColor = new THREE.Color(0xa855f7);
-
-    for (let i = 0; i < particleCount; i++) {
-      const radius = 1.5 + Math.random() * 4.5;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = (Math.random() - 0.5) * Math.PI * 0.8;
-
-      positions[i * 3] = radius * Math.cos(theta) * Math.cos(phi);
-      positions[i * 3 + 1] = radius * Math.sin(phi);
-      positions[i * 3 + 2] = radius * Math.sin(theta) * Math.cos(phi);
-
-      const chosenColor =
-        Math.random() > 0.6 ? goldColor : Math.random() > 0.3 ? bronzeColor : purpleColor;
-
-      colors[i * 3] = chosenColor.r;
-      colors[i * 3 + 1] = chosenColor.g;
-      colors[i * 3 + 2] = chosenColor.b;
-    }
-
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    particleGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const particleMat = new THREE.PointsMaterial({
-      size: 0.05,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.8,
-      blending: THREE.AdditiveBlending,
-    });
-
-    const particleSystem = new THREE.Points(particleGeo, particleMat);
-    scene.add(particleSystem);
-
-    // 4. Lighting Rig
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    scene.add(ambientLight);
-
-    const goldLight = new THREE.PointLight(0xf59e0b, 3, 20);
-    goldLight.position.set(3, 3, 4);
-    scene.add(goldLight);
-
-    const rimLight = new THREE.PointLight(0xa855f7, 2, 20);
-    rimLight.position.set(-3, -2, 2);
-    scene.add(rimLight);
-
-    const frontLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    frontLight.position.set(0, 2, 5);
-    scene.add(frontLight);
-
-    // Mouse Interaction
-    let mouseX = 0;
-    let mouseY = 0;
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = container.getBoundingClientRect();
-      mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouseY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-
-    // Handle Window Resize
-    const handleResize = () => {
-      if (!container) return;
-      const newW = container.clientWidth;
-      const newH = container.clientHeight || 480;
-      camera.aspect = newW / newH;
-      camera.updateProjectionMatrix();
-      renderer.setSize(newW, newH);
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    // Animation Loop
-    let animationFrameId: number;
-    let clock = new THREE.Clock();
-
-    const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
-      const elapsedTime = clock.getElapsedTime();
-
-      // Shield floating and spinning
-      shieldMesh.rotation.y = Math.sin(elapsedTime * 0.8) * 0.35 + mouseX * 0.4;
-      shieldMesh.rotation.x = Math.cos(elapsedTime * 0.6) * 0.15 + mouseY * 0.3;
-      shieldMesh.position.y = Math.sin(elapsedTime * 1.5) * 0.08;
-
-      innerRing.rotation.y = shieldMesh.rotation.y;
-      innerRing.rotation.x = shieldMesh.rotation.x;
-      innerRing.position.y = shieldMesh.position.y;
-
-      // Swirling particle vortex
-      particleSystem.rotation.y = elapsedTime * 0.15;
-      particleSystem.rotation.x = elapsedTime * 0.05;
-
-      renderer.render(scene, camera);
-    };
-
-    animate();
-
-    return () => {
-      clearTimeout(contentTimer);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('resize', handleResize);
-      cancelAnimationFrame(animationFrameId);
-
-      // Clean up Three.js objects
-      shieldGeo.dispose();
-      shieldMat.dispose();
-      innerRingGeo.dispose();
-      innerRingMat.dispose();
-      particleGeo.dispose();
-      particleMat.dispose();
-      renderer.dispose();
-
-      if (container && renderer.domElement) {
-        container.removeChild(renderer.domElement);
-      }
-    };
+    return () => clearTimeout(timer);
   }, []);
 
   return (
-    <div className="relative w-full max-w-4xl mx-auto min-h-[640px] px-4 py-8 flex flex-col items-center justify-center text-center overflow-hidden">
-      {/* Three.js 3D Viewport in background */}
-      <div
-        ref={mountRef}
-        className="absolute inset-0 w-full h-full pointer-events-none z-0 flex items-center justify-center"
-      />
+    <div className="relative w-full max-w-4xl mx-auto px-4 py-6 sm:py-10 flex flex-col items-center justify-center text-center font-sans">
+      {/* Ambient Classic Glow */}
+      <div className="absolute top-12 w-80 h-80 rounded-full bg-accent/10 blur-3xl pointer-events-none -z-10" />
 
-      {/* Radial Energy Burst Glow */}
-      <div className="absolute w-[500px] h-[500px] rounded-full bg-gradient-to-r from-amber-500/20 via-purple-600/15 to-transparent blur-3xl pointer-events-none -z-10 animate-pulse" />
-
-      {/* Game Promotion Content Overlay */}
+      {/* Main Content Container */}
       <div
-        className={`relative z-10 flex flex-col items-center transition-all duration-700 transform ${
-          showContent ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-6 scale-95'
+        className={`w-full flex flex-col items-center transition-all duration-700 transform ${
+          showContent ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-98'
         }`}
       >
-        {/* Top Gold Glowing Tag matching game calibration */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/60 text-amber-300 font-mono text-xs uppercase tracking-widest font-black shadow-[0_0_20px_rgba(245,158,11,0.4)] mb-4 animate-bounce">
-          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+        {/* Subtle Status Pill */}
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-subtle border border-accent/20 text-accent font-mono text-xs uppercase tracking-wider font-semibold mb-4">
+          <Sparkles className="w-3.5 h-3.5" />
           <span>Rank Calibrated</span>
-          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
         </div>
 
-        {/* 2D Fallback Icon overlay if WebGL is delayed */}
-        <div className="relative w-28 h-28 sm:w-36 sm:h-36 my-2 drop-shadow-[0_0_35px_rgba(205,127,50,0.8)] pointer-events-none">
-          <Image
-            src="/ranks/bronze.svg"
-            alt="Soldier Rank Emblem"
-            fill
-            className="object-contain animate-float-medium"
-            priority
-          />
+        {/* Compact, Classic Rank Emblem */}
+        <div className="relative my-2">
+          <div className="relative w-20 h-20 sm:w-24 sm:h-24 p-3 rounded-2xl bg-surface border-2 border-amber-500/30 shadow-lg shadow-amber-500/10 flex items-center justify-center">
+            <div className="relative w-full h-full">
+              <Image
+                src={currentDef.badgeUrl}
+                alt={`${currentDef.displayName} Rank`}
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
+          </div>
+          {/* Subtle outer accent ring */}
+          <div className="absolute -inset-1 rounded-3xl border border-amber-500/20 pointer-events-none" />
         </div>
 
-        {/* Giant Metallic Rank Title */}
-        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-serif font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-b from-amber-200 via-amber-400 to-amber-700 drop-shadow-[0_5px_25px_rgba(205,127,50,0.6)] mt-2">
-          SOLDIER
+        {/* Rank Title & Persona */}
+        <h1 className="text-3xl sm:text-4xl font-serif font-bold tracking-tight text-text-primary mt-3">
+          {currentDef.displayName.toUpperCase()}
         </h1>
 
-        <div className="text-sm sm:text-base font-mono font-semibold text-amber-300/90 tracking-widest uppercase mt-1">
-          Tier I &bull; Bronze League
+        <div className="text-xs font-mono font-medium text-warning tracking-wider uppercase mt-1">
+          Tier I &bull; Baseline Standing
         </div>
 
-        {/* Lore / Motivation Text */}
-        <p className="max-w-md mx-auto text-xs sm:text-sm text-amber-100/80 leading-relaxed font-normal mt-3 px-4">
-          Welcome to the arena, <strong className="text-white">{username}</strong>. Fresh recruit. You know the basics; now learn to think out loud.
+        <p className="max-w-lg mx-auto text-xs sm:text-sm text-text-muted leading-relaxed font-normal mt-2.5 px-4">
+          Welcome to Rehearsal AI, <strong className="text-text-primary font-semibold">{username}</strong>. Your starting profile is calibrated at <strong className="text-text-primary">{currentDef.displayName}</strong>.
         </p>
 
-        {/* Unlocked Capabilities Pills Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-lg w-full mt-6 mb-8 text-left">
-          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-black/50 border border-amber-900/40 text-xs text-amber-100/90 backdrop-blur-md">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <span>45-Minute Voice Interview Chambers</span>
+        {/* ================================================================= */}
+        {/* THE FULL RANK LADDER: "You are here. Jump to these ranks." */}
+        {/* ================================================================= */}
+        <div className="w-full mt-8 p-5 sm:p-6 rounded-2xl bg-surface border border-border shadow-sm text-left space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border">
+            <div>
+              <h3 className="text-sm sm:text-base font-bold text-text-primary flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-accent" />
+                <span>Rank Advancement Ladder</span>
+              </h3>
+              <p className="text-xs text-text-muted mt-0.5">
+                You are here. Perform well in technical interviews and optimize code complexity to jump to higher tiers.
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-success-subtle text-success text-xs font-mono font-semibold self-start sm:self-auto">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Jump up to 6 Tiers</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-black/50 border border-amber-900/40 text-xs text-amber-100/90 backdrop-blur-md">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <span>Real-Time Gnani Voice Proctoring</span>
+          {/* Rank Pathway Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1">
+            {RANK_ORDER.map((tierName, idx) => {
+              const def = RANKS[tierName];
+              const isCurrent = tierName === assignedRank;
+              const isHigher = idx > RANK_ORDER.indexOf(assignedRank);
+
+              return (
+                <div
+                  key={tierName}
+                  className={`p-3 rounded-xl border transition-all flex flex-col justify-between relative ${
+                    isCurrent
+                      ? 'bg-accent-subtle/40 border-2 border-accent shadow-sm'
+                      : isHigher
+                      ? 'bg-bg-subtle/80 border-border hover:border-border-strong hover:bg-surface'
+                      : 'bg-surface border-border opacity-70'
+                  }`}
+                >
+                  {/* Current Rank Tag */}
+                  {isCurrent && (
+                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-accent text-accent-foreground text-[10px] font-mono font-bold uppercase tracking-wider shadow-xs whitespace-nowrap">
+                      You are here
+                    </div>
+                  )}
+
+                  {/* Badge & Tier info */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="relative w-6 h-6 flex-shrink-0">
+                      <Image
+                        src={def.badgeUrl}
+                        alt={def.displayName}
+                        fill
+                        className="object-contain"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-text-primary truncate">
+                        {def.displayName}
+                      </h4>
+                      <span className="text-[10px] font-mono text-text-muted block">
+                        Tier {idx + 1}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Points requirement & Jump status */}
+                  <div className="pt-2 border-t border-border/60 flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-text-subtle font-medium">
+                      {def.pointsRequired} pts
+                    </span>
+                    {isCurrent ? (
+                      <span className="text-accent font-semibold text-[10px]">Active</span>
+                    ) : (
+                      <span className="text-text-muted text-[10px] flex items-center gap-0.5">
+                        <span>Jump</span>
+                        <ChevronRight className="w-2.5 h-2.5" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-black/50 border border-amber-900/40 text-xs text-amber-100/90 backdrop-blur-md">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <span>Live LeetCode Test Suite Evaluation</span>
-          </div>
-
-          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-black/50 border border-amber-900/40 text-xs text-amber-100/90 backdrop-blur-md">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <span>Dual Leagues (Tech &amp; Behavioral HR)</span>
+          {/* Motivational Guide Callout */}
+          <div className="flex items-start gap-3 p-3.5 rounded-xl bg-bg border border-border text-xs text-text-muted">
+            <Award className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
+            <div className="space-y-0.5">
+              <span className="font-semibold text-text-primary">How rank advancement works:</span>
+              <p className="leading-relaxed">
+                Every mock interview assesses your algorithmic optimality, syntax fluency, code style, and explanation clarity. Higher performance earns rating points that automatically promote you through Gold, Platinum, Diamond, Crown, and Conqueror.
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* High-Energy Action Button */}
-        <button
-          type="button"
-          onClick={onEnterArena}
-          className="px-10 py-4 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-neutral-950 font-black text-base shadow-[0_0_40px_rgba(245,158,11,0.65)] hover:shadow-[0_0_55px_rgba(245,158,11,0.85)] transition-all flex items-center gap-3 active:scale-95 group cursor-pointer"
-        >
-          <Zap className="w-5 h-5 text-neutral-950 fill-current" />
-          <span>Enter Rehearsal Arena</span>
-          <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1.5" />
-        </button>
+        {/* Classic Enter Arena CTA Button */}
+        <div className="mt-7">
+          <button
+            type="button"
+            onClick={onEnterArena}
+            className="px-8 py-3 rounded-xl bg-accent hover:bg-accent-hover text-accent-foreground font-semibold text-sm shadow-sm transition-all flex items-center gap-2 active:scale-95 group cursor-pointer focus-ring"
+          >
+            <span>Enter Rehearsal Arena</span>
+            <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+          </button>
+        </div>
       </div>
     </div>
   );
 }
-

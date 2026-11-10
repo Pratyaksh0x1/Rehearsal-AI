@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const league = (searchParams.get('league') || 'technical').toLowerCase();
+    const league = (searchParams.get('league') || 'overall').toLowerCase();
     const tier = searchParams.get('tier') as RankTier | null;
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)));
@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
     let totalCount = 0;
 
     const isHrLeague = league === 'hr';
+    const isTechLeague = league === 'technical';
 
     if (isDatabaseConfigured() && db) {
       try {
@@ -30,25 +31,39 @@ export async function GET(req: NextRequest) {
             : (db.select().from(users).where(eq(users.technicalRank, tier)) as any);
         }
 
+        const orderColumn = isHrLeague
+          ? users.hrPoints
+          : isTechLeague
+          ? users.technicalPoints
+          : users.points;
+
         const rows = await query
           .orderBy(
-            desc(isHrLeague ? users.hrPoints : users.technicalPoints),
+            desc(orderColumn),
             users.createdAt
           )
           .limit(limit)
           .offset(offset);
 
         items = rows.map((u, idx) => {
-          const userRank = isHrLeague ? u.hrRank : u.technicalRank || u.rank;
-          const userPoints = isHrLeague ? u.hrPoints : u.technicalPoints ?? u.points;
-          const rankDef = getRankDefinition(userRank);
+          const userRank = isHrLeague
+            ? u.hrRank
+            : isTechLeague
+            ? (u.technicalRank || u.rank)
+            : u.rank;
+          const userPoints = isHrLeague
+            ? (u.hrPoints ?? 0)
+            : isTechLeague
+            ? (u.technicalPoints ?? u.points ?? 0)
+            : (u.points ?? 0);
+          const rankDef = getRankDefinition(userRank || 'Bronze');
 
           return {
             position: offset + idx + 1,
             userId: u.id,
             username: u.username || 'Anonymous',
-            league: isHrLeague ? 'hr' : 'technical',
-            rank: userRank,
+            league: isHrLeague ? 'hr' : isTechLeague ? 'technical' : 'overall',
+            rank: userRank || 'Bronze',
             rankBadge: rankDef.badgeUrl,
             points: userPoints,
           };

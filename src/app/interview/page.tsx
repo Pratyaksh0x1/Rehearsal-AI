@@ -13,6 +13,7 @@ import {
   TechnicalSetupConfig,
 } from '@/components/interview/TechnicalRoundSetup';
 import { BeforeYouStartSection } from '@/components/interview/BeforeYouStartSection';
+import { AuthGate } from '@/components/auth/AuthGate';
 
 export default function InterviewHubPage() {
   const router = useRouter();
@@ -76,6 +77,7 @@ export default function InterviewHubPage() {
       id: 'technical',
       title: 'Technical',
       subtitle: 'Data Structures and Algorithms',
+      duration: '20 min',
       href: '/interview/technical',
       icon: Code2,
       isActive: true, // Glowing active card as shown in screenshot
@@ -99,6 +101,7 @@ export default function InterviewHubPage() {
       id: 'resume',
       title: 'Resume Roast',
       subtitle: 'Deep dive on your resume',
+      duration: '20 min',
       href: '/interview/resume',
       icon: FileText,
       isActive: false,
@@ -122,6 +125,7 @@ export default function InterviewHubPage() {
       id: 'hr',
       title: 'Behavioral',
       subtitle: 'HR & Leadership principles',
+      duration: '10 min',
       href: '/interview/hr',
       icon: MessageSquare,
       isActive: false,
@@ -144,10 +148,11 @@ export default function InterviewHubPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-bg dark:bg-[#0a0818] text-text-primary flex flex-col transition-colors selection:bg-purple-500/30">
-      <Navbar />
+    <AuthGate>
+      <div className="min-h-screen bg-bg text-text-primary flex flex-col transition-colors selection:bg-accent-subtle selection:text-accent">
+        <Navbar />
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
+        <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
         {currentStep === 'before-start' ? (
           <BeforeYouStartSection
             onBack={() => setCurrentStep('setup-technical')}
@@ -160,12 +165,12 @@ export default function InterviewHubPage() {
           />
         ) : (
           <>
-            {/* Step 1 Indicator Header matching screenshot */}
+            {/* Step 1 Indicator Header */}
             <div className="mb-8 flex items-baseline">
-              <span className="font-serif italic text-purple-600 dark:text-purple-300 text-xl sm:text-2xl font-normal mr-3">
+              <span className="text-accent text-xl sm:text-2xl font-semibold mr-3">
                 1
               </span>
-              <h1 className="text-sm sm:text-base font-medium text-text-primary dark:text-white/90 tracking-wide">
+              <h1 className="text-sm sm:text-base font-medium text-text-primary tracking-wide">
                 Choose your round
               </h1>
             </div>
@@ -189,15 +194,15 @@ export default function InterviewHubPage() {
                         captureEvent('interview_track_selected', { track: track.id });
                       }
                     }}
-                    className={`rounded-3xl p-6 sm:p-7 flex flex-col justify-between shadow-xl relative overflow-hidden backdrop-blur-2xl transition-all duration-300 hover:-translate-y-1.5 group cursor-pointer ${
+                    className={`rounded-2xl p-6 sm:p-7 flex flex-col justify-between shadow-sm relative overflow-hidden transition-all duration-200 hover:-translate-y-1 group cursor-pointer ${
                       track.isActive
-                        ? 'bg-surface border-2 border-purple-500 shadow-xl dark:bg-[#141226]/95 dark:border-purple-500/50 dark:shadow-[0_0_35px_rgba(168,85,247,0.18)] hover:border-purple-600'
-                        : 'bg-surface border border-border hover:border-purple-400 hover:shadow-lg dark:bg-[#141226]/85 dark:border-white/10 dark:hover:border-purple-500/40 dark:hover:bg-[#18152e]'
+                        ? 'bg-surface border-2 border-accent shadow-md ring-1 ring-accent/20'
+                        : 'bg-surface border border-border hover:border-border-strong hover:bg-surface-hover'
                     }`}
                   >
-                    {/* Ambient purple glow for active card */}
+                    {/* Ambient glow for active card */}
                     {track.isActive && (
-                      <div className="absolute -right-12 -top-12 w-44 h-44 rounded-full bg-purple-500/10 dark:bg-purple-600/15 blur-2xl pointer-events-none" />
+                      <div className="absolute -right-12 -top-12 w-44 h-44 rounded-full bg-accent-subtle blur-2xl pointer-events-none" />
                     )}
 
                     <div>
@@ -205,14 +210,19 @@ export default function InterviewHubPage() {
                       <div className="flex items-start justify-between gap-3 mb-5">
                         <div className="flex items-center gap-3.5">
                           {/* Squircle Icon Container */}
-                          <div className="w-12 h-12 rounded-2xl bg-purple-100 border border-purple-300 flex items-center justify-center flex-shrink-0 text-purple-700 shadow-sm dark:bg-purple-950/60 dark:border-purple-500/30 dark:text-purple-300 group-hover:scale-105 transition-transform">
+                          <div className="w-12 h-12 rounded-xl bg-accent-subtle border border-accent/20 flex items-center justify-center flex-shrink-0 text-accent shadow-sm group-hover:scale-105 transition-transform">
                             <Icon className="w-5 h-5 text-purple-700 dark:text-purple-300" />
                           </div>
 
                           <div>
-                            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-text-primary dark:text-white tracking-tight group-hover:text-purple-600 dark:group-hover:text-purple-200 transition-colors">
-                              {track.title}
-                            </h2>
+                            <div className="flex items-center gap-2">
+                              <h2 className="font-serif text-2xl sm:text-3xl font-bold text-text-primary dark:text-white tracking-tight group-hover:text-purple-600 dark:group-hover:text-purple-200 transition-colors">
+                                {track.title}
+                              </h2>
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-accent-subtle text-accent border border-accent/20">
+                                {track.duration}
+                              </span>
+                            </div>
                             <p className="text-xs text-text-muted mt-0.5 font-normal">
                               {track.subtitle}
                             </p>
@@ -285,5 +295,6 @@ export default function InterviewHubPage() {
 
       <Footer />
     </div>
+    </AuthGate>
   );
 }

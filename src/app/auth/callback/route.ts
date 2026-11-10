@@ -3,11 +3,13 @@ import { createClient } from '@/lib/supabase/server';
 import { db, isDatabaseConfigured } from '@/db';
 import { users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { isUserOnboarded } from '@/lib/user';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') || '/home';
+  const rawNext = searchParams.get('next') || '/home';
+  const safeNext = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/home';
 
   if (code) {
     const supabase = createClient();
@@ -36,7 +38,7 @@ export async function GET(request: Request) {
               points: 0,
             });
             return NextResponse.redirect(`${origin}/onboarding`);
-          } else if (!existing[0].username || !existing[0].resumeText) {
+          } else if (!isUserOnboarded(existing[0])) {
             return NextResponse.redirect(`${origin}/onboarding`);
           }
         } catch (dbErr) {
@@ -44,7 +46,7 @@ export async function GET(request: Request) {
         }
       }
 
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${origin}${safeNext}`);
     }
   }
 

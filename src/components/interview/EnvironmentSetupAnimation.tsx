@@ -90,25 +90,24 @@ export function EnvironmentSetupAnimation({
         isFadingOut ? 'opacity-0 scale-98 pointer-events-none' : 'opacity-100 scale-100'
       }`}
     >
-      <div className="rounded-3xl border border-border bg-surface p-6 sm:p-10 shadow-2xl relative backdrop-blur-2xl dark:bg-[#15101a]/95 dark:border-white/10 dark:shadow-[0_15px_60px_rgba(0,0,0,0.6)] overflow-hidden">
-        {/* Ambient background glow pulses */}
-        <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full bg-amber-500/10 blur-3xl pointer-events-none animate-pulse" />
-        <div className="absolute -bottom-20 -right-20 w-64 h-64 rounded-full bg-purple-500/10 blur-3xl pointer-events-none animate-pulse" />
+      <div className="rounded-2xl border border-border bg-surface p-6 sm:p-10 shadow-sm relative overflow-hidden">
+        {/* Ambient subtle accent glow */}
+        <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full bg-accent-subtle blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col items-center text-center">
           {/* Central Rotating Rings & Glowing Core */}
           <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center mb-6">
             {/* Outer Slow Rotating Dashed Ring */}
-            <div className="absolute inset-0 rounded-full border-2 border-dashed border-amber-500/40 animate-[spin_8s_linear_infinite]" />
+            <div className="absolute inset-0 rounded-full border-2 border-dashed border-accent/40 animate-[spin_8s_linear_infinite]" />
 
             {/* Inner Reverse Rotating Ring */}
-            <div className="absolute inset-2 rounded-full border border-purple-500/30 animate-[spin_5s_linear_infinite_reverse]" />
+            <div className="absolute inset-2 rounded-full border border-border-strong animate-[spin_5s_linear_infinite_reverse]" />
 
             {/* Glowing Pulse Wave */}
-            <div className="absolute inset-4 rounded-full bg-amber-500/15 animate-ping" />
+            <div className="absolute inset-4 rounded-full bg-accent-subtle animate-ping" />
 
             {/* Core Avatar or Tech Squircle */}
-            <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden ring-2 ring-amber-500/60 shadow-[0_0_30px_rgba(245,158,11,0.35)] flex items-center justify-center bg-[#1e1518]">
+            <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden ring-2 ring-accent/60 shadow-sm flex items-center justify-center bg-surface">
               {interviewerAvatar ? (
                 <Image
                   src={interviewerAvatar}
@@ -117,29 +116,29 @@ export function EnvironmentSetupAnimation({
                   className="object-cover scale-105"
                 />
               ) : (
-                <Terminal className="w-8 h-8 text-[#f59e0b]" />
+                <Terminal className="w-8 h-8 text-accent" />
               )}
             </div>
 
             {/* Percentage Badge */}
-            <div className="absolute -bottom-2.5 bg-[#221619] border border-amber-500/50 text-[#f59e0b] text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full shadow-md">
+            <div className="absolute -bottom-2.5 bg-surface border border-border text-accent text-xs font-mono font-bold px-2.5 py-0.5 rounded-full shadow-sm">
               {progress}%
             </div>
           </div>
 
           {/* Heading */}
-          <h2 className="font-serif text-2xl sm:text-3xl font-normal text-text-primary dark:text-white tracking-tight mb-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-text-primary tracking-tight mb-2">
             Setting up your environment
           </h2>
-          <p className="text-xs sm:text-sm text-text-muted dark:text-zinc-400 max-w-md mb-8">
+          <p className="text-xs sm:text-sm text-text-muted max-w-md mb-8">
             Connecting container runtime, anti-cheat proctor, and briefing with{' '}
-            <span className="text-[#f59e0b] font-semibold">{interviewerName}</span>...
+            <span className="text-accent font-semibold">{interviewerName}</span>...
           </p>
 
-          {/* Smooth Metallic Progress Bar */}
-          <div className="w-full bg-slate-200 dark:bg-white/5 h-2 rounded-full overflow-hidden mb-8 border border-border dark:border-white/10 relative">
+          {/* Progress Bar */}
+          <div className="w-full bg-surface-hover h-2 rounded-full overflow-hidden mb-8 border border-border relative">
             <div
-              className="h-full bg-gradient-to-r from-amber-500 via-[#f7cf7c] to-amber-500 rounded-full transition-all duration-75 shadow-[0_0_15px_rgba(247,207,124,0.6)]"
+              className="h-full bg-accent rounded-full transition-all duration-75 shadow-sm"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -154,22 +153,22 @@ export function EnvironmentSetupAnimation({
               return (
                 <div
                   key={idx}
-                  className={`rounded-2xl p-3 sm:p-3.5 border transition-all duration-200 flex items-center justify-between ${
+                  className={`rounded-xl p-3 sm:p-3.5 border transition-all duration-200 flex items-center justify-between ${
                     isCurrent
-                      ? 'border-amber-500/40 bg-amber-500/10 dark:bg-amber-500/[0.08] shadow-[0_0_15px_rgba(245,158,11,0.1)]'
+                      ? 'border-accent bg-accent-subtle'
                       : isPast
-                      ? 'border-border/60 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] opacity-80'
+                      ? 'border-border bg-bg-subtle opacity-90'
                       : 'border-transparent bg-transparent opacity-40'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         isCurrent
-                          ? 'bg-amber-500/20 text-[#f59e0b]'
+                          ? 'bg-accent text-accent-foreground'
                           : isPast
-                          ? 'bg-emerald-500/20 text-emerald-500'
-                          : 'bg-white/5 text-zinc-500'
+                          ? 'bg-success-subtle text-success'
+                          : 'bg-surface-hover text-text-subtle'
                       }`}
                     >
                       <StepIcon className="w-4 h-4" />
@@ -179,10 +178,10 @@ export function EnvironmentSetupAnimation({
                       <h4
                         className={`text-xs sm:text-sm font-semibold leading-tight ${
                           isCurrent
-                            ? 'text-text-primary dark:text-white'
+                            ? 'text-text-primary'
                             : isPast
-                            ? 'text-text-primary dark:text-zinc-300'
-                            : 'text-text-muted dark:text-zinc-500'
+                            ? 'text-text-muted'
+                            : 'text-text-subtle'
                         }`}
                       >
                         {step.title}

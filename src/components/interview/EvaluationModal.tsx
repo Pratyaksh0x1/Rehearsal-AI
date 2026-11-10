@@ -167,6 +167,46 @@ export function EvaluationModal({ isOpen, onClose, type, evaluation }: Evaluatio
               </span>
             </div>
 
+            {/* Candidate Project Accuracy Assessment */}
+            {resume.accuracyAssessment && (
+              <div className="p-4 rounded-xl bg-surface-hover/70 border border-border space-y-2">
+                <h4 className="text-xs font-bold text-accent uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                  <Sparkles className="w-4 h-4 text-accent" /> Candidate Project Accuracy & Technical Truthfulness
+                </h4>
+                <p className="text-xs text-text-muted leading-relaxed">
+                  {resume.accuracyAssessment}
+                </p>
+              </div>
+            )}
+
+            {/* Candidate Strengths */}
+            {resume.candidateStrengths && resume.candidateStrengths.length > 0 && (
+              <div className="p-4 rounded-xl bg-success-subtle/40 border border-success/30 space-y-2">
+                <h4 className="text-xs font-bold text-success uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                  <CheckCircle2 className="w-4 h-4 text-success" /> Key Strengths Articulated
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-xs text-text-muted">
+                  {resume.candidateStrengths.map((str, idx) => (
+                    <li key={idx}>{str}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Recommendations to Improve Resume */}
+            {resume.resumeImprovements && resume.resumeImprovements.length > 0 && (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                  <TrendingUp className="w-4 h-4 text-amber-400" /> What You Can Do to Improve Your Resume
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-xs text-text-muted">
+                  {resume.resumeImprovements.map((imp, idx) => (
+                    <li key={idx}>{imp}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div>
               <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider mb-3">
                 Top Priority Changes

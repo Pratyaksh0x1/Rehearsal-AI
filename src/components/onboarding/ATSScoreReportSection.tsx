@@ -57,17 +57,16 @@ export function ATSScoreReportSection({
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-8 sm:py-12 flex flex-col items-center">
-      {/* Top Header matching Screenshot 3 */}
-      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold text-center text-white mb-10 tracking-tight">
-        Here&apos;s how an <span className="italic font-normal text-amber-300">ATS</span> reads it
+      {/* Top Header */}
+      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-extrabold text-center text-text-primary mb-10 tracking-tight">
+        Here&apos;s how an <span className="italic font-normal text-warning">ATS</span> reads it
       </h2>
 
       {/* 3-Column Grid matching Screenshot 3 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mb-10 items-stretch">
         {/* ================================================================= */}
-        {/* COLUMN 1: Circular Gauge Score (4 Cols)                           */}
-        {/* ================================================================= */}
-        <div className="lg:col-span-4 rounded-3xl bg-[#161212]/90 border border-amber-900/30 p-6 sm:p-7 flex flex-col justify-between shadow-2xl backdrop-blur-xl">
+        {/* COLUMN 1: Circular Gauge Score (4 Cols) */}
+        <div className="lg:col-span-4 rounded-2xl bg-surface border border-border p-6 sm:p-7 flex flex-col justify-between shadow-sm">
           <div className="flex flex-col items-center text-center">
             {/* SVG Circular Progress Ring */}
             <div className="relative w-44 h-44 flex items-center justify-center my-3">
@@ -77,7 +76,7 @@ export function ATSScoreReportSection({
                   cx="88"
                   cy="88"
                   r="72"
-                  stroke="rgba(255, 255, 255, 0.08)"
+                  stroke="var(--color-surface-hover)"
                   strokeWidth="8"
                   fill="transparent"
                 />
@@ -98,7 +97,7 @@ export function ATSScoreReportSection({
 
               {/* Inside Gauge Text */}
               <div className="absolute flex flex-col items-center justify-center">
-                <span className="text-5xl font-serif font-black text-white leading-none">
+                <span className="text-5xl font-bold text-text-primary leading-none">
                   {animatedScore}
                 </span>
                 <span className={`text-base font-bold mt-1 tracking-wide ${scoreColor}`}>
@@ -107,21 +106,19 @@ export function ATSScoreReportSection({
               </div>
             </div>
 
-            <span className="text-xs font-mono text-amber-200/60 mt-1 block">
+            <span className="text-xs font-mono font-medium text-text-muted mt-1 block">
               out of 100
             </span>
           </div>
 
-          <p className="text-xs text-amber-100/70 leading-relaxed font-normal text-center mt-6 pt-4 border-t border-amber-900/20">
+          <p className="text-xs text-text-muted leading-relaxed font-normal text-center mt-6 pt-4 border-t border-border">
             How cleanly an applicant-tracking system can read your resume, and how strong its bullet points look. Our own measure: every company&apos;s ATS reads a little differently.
           </p>
         </div>
 
-        {/* ================================================================= */}
-        {/* COLUMN 2: What to fix (4 Cols)                                    */}
-        {/* ================================================================= */}
-        <div className="lg:col-span-4 rounded-3xl bg-[#161212]/90 border border-amber-900/30 p-6 sm:p-7 flex flex-col shadow-2xl backdrop-blur-xl">
-          <h3 className="font-serif text-lg font-bold text-white mb-6">
+        {/* COLUMN 2: What to fix (4 Cols) */}
+        <div className="lg:col-span-4 rounded-2xl bg-surface border border-border p-6 sm:p-7 flex flex-col shadow-sm">
+          <h3 className="text-lg font-bold text-text-primary mb-6">
             What to fix
           </h3>
 
@@ -129,18 +126,18 @@ export function ATSScoreReportSection({
             {topChanges && topChanges.length > 0 ? (
               topChanges.map((change, idx) => (
                 <div key={idx} className="flex items-start gap-3">
-                  <div className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <div className="w-5 h-5 rounded-full bg-accent-subtle text-accent flex items-center justify-center flex-shrink-0 mt-0.5">
                     <span className="text-xs font-bold">{idx + 1}</span>
                   </div>
-                  <p className="text-xs text-amber-100/85 leading-relaxed font-normal">
+                  <p className="text-xs text-text-muted leading-relaxed font-normal">
                     {change}
                   </p>
                 </div>
               ))
             ) : (
-              <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-emerald-200/90 leading-relaxed font-medium">
+              <div className="flex items-start gap-3 p-3.5 rounded-xl bg-success-subtle border border-success/30">
+                <Check className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-success leading-relaxed font-medium">
                   Nothing to fix: every check passed. Your interview is where it gets tested.
                 </p>
               </div>
@@ -148,23 +145,21 @@ export function ATSScoreReportSection({
           </div>
         </div>
 
-        {/* ================================================================= */}
-        {/* COLUMN 3: The ten checks (4 Cols) matching Screenshot 3           */}
-        {/* ================================================================= */}
-        <div className="lg:col-span-4 rounded-3xl bg-[#161212]/90 border border-amber-900/30 p-6 sm:p-7 flex flex-col justify-between shadow-2xl backdrop-blur-xl">
-          <h3 className="font-serif text-lg font-bold text-white mb-4">
+        {/* COLUMN 3: The ten checks (4 Cols) */}
+        <div className="lg:col-span-4 rounded-2xl bg-surface border border-border p-6 sm:p-7 flex flex-col justify-between shadow-sm">
+          <h3 className="text-lg font-bold text-text-primary mb-4">
             The ten checks
           </h3>
 
           <div className="space-y-2.5">
             {checks.map((item, idx) => (
               <div key={idx} className="flex items-center justify-between gap-3 text-xs">
-                <span className="text-amber-100/80 font-normal truncate">
+                <span className="text-text-muted font-normal truncate">
                   {item.label}
                 </span>
 
                 {/* Progress bar pill */}
-                <div className="w-24 sm:w-28 h-1.5 rounded-full bg-white/10 overflow-hidden flex-shrink-0">
+                <div className="w-24 sm:w-28 h-1.5 rounded-full bg-surface-hover overflow-hidden flex-shrink-0 border border-border">
                   <div
                     className={`h-full rounded-full ${item.color} transition-all duration-700 shadow-sm`}
                     style={{ width: `${item.value}%` }}
@@ -176,18 +171,16 @@ export function ATSScoreReportSection({
         </div>
       </div>
 
-      {/* ================================================================= */}
-      {/* Bottom Subtext & Continue Button matching Screenshot 3            */}
-      {/* ================================================================= */}
+      {/* Bottom Subtext & Continue Button */}
       <div className="flex flex-col items-center gap-4">
-        <p className="text-xs text-amber-200/60 font-mono text-center">
+        <p className="text-xs text-text-muted font-medium text-center">
           You can update your resume any time from your profile, and see this again.
         </p>
 
         <button
           type="button"
           onClick={onContinue}
-          className="px-9 py-3 rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-bold text-sm shadow-[0_0_30px_rgba(245,158,11,0.5)] hover:shadow-[0_0_40px_rgba(245,158,11,0.7)] transition-all flex items-center gap-2 active:scale-95 group cursor-pointer"
+          className="px-9 py-3 rounded-lg bg-accent hover:bg-accent-hover text-accent-foreground font-semibold text-sm shadow-sm transition-all flex items-center gap-2 active:scale-95 group cursor-pointer focus-ring"
         >
           <span>Continue</span>
           <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />

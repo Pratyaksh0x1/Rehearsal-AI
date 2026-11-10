@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/supabase/server';
 import { parseAndSaveResume, MAX_RESUME_SIZE_BYTES } from '@/lib/resume/parser';
 import { db, isDatabaseConfigured } from '@/db';
 import { users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { generateWithSchema, Message } from '@/lib/llm';
+import { ResumeEvaluationSchema } from '@/lib/llm/schemas';
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
+    const { user: authUser, error: authError } = await requireUser();
+    if (authError || !authUser || !authUser.email) {
+      return NextResponse.json(
+        { error: 'Unauthorized: login required' },
+        { status: 401 }
+      );
+    }
 
-    const userId = authUser?.id || 'anonymous_candidate';
-    const userEmail = authUser?.email;
+    const userId = authUser.id;
+    const userEmail = authUser.email;
 
     const formData = await req.formData();
     const file = formData.get('resume') as File | null;
@@ -33,6 +38,37 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     const result = await parseAndSaveResume(buffer, file.name, userId);
+
+    // Score resume with LLM if text was extracted
+    let atsScore = 85;
+    let topChanges: string[] = [];
+    let sectionWiseNotes: any = null;
+    let rewrittenBullets: any[] = [];
+
+    if (result.text && result.text.length > 30) {
+      try {
+        const messages: Message[] = [
+          {
+            role: 'system',
+            content: `You are an elite Applicant Tracking System (ATS) and Senior Hiring Manager.
+Evaluate the candidate's resume for SDE roles.
+Analyze structure, measurable metrics, action verbs, keyword density, and technical clarity.
+Return strict JSON matching the schema.`,
+          },
+          {
+            role: 'user',
+            content: `Resume Content:\n\n${result.text.substring(0, 4500)}`,
+          },
+        ];
+        const { data } = await generateWithSchema(messages, ResumeEvaluationSchema);
+        if (data?.score) atsScore = data.score;
+        if (data?.topChanges) topChanges = data.topChanges;
+        if (data?.sectionWiseNotes) sectionWiseNotes = data.sectionWiseNotes;
+        if (data?.rewrittenBullets) rewrittenBullets = data.rewrittenBullets;
+      } catch (llmErr) {
+        console.warn('Resume LLM scoring fallback:', llmErr);
+      }
+    }
 
     // Save to database if configured and user email exists
     if (userEmail && isDatabaseConfigured() && db) {
@@ -54,6 +90,10 @@ export async function POST(req: NextRequest) {
       resumeUrl: result.url,
       resumeText: result.text,
       wordCount: result.wordCount,
+      atsScore,
+      topChanges,
+      sectionWiseNotes,
+      rewrittenBullets,
     });
   } catch (error: any) {
     console.error('Resume upload error:', error);

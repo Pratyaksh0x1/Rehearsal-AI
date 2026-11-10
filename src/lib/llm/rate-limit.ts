@@ -3,15 +3,19 @@ interface RateLimitRecord {
   resetAt: number;
 }
 
-const windowMs = 60 * 1000; // 1 minute window
-const maxRequestsPerWindow = 30; // 30 requests per minute per user
+const DEFAULT_WINDOW_MS = 60 * 1000; // 1 minute window
+const DEFAULT_MAX_REQUESTS = 60;
 
 const rateLimitMap = new Map<string, RateLimitRecord>();
 
 /**
- * In-memory sliding window rate limiter per user/IP
+ * In-memory sliding window rate limiter per user
  */
-export function checkRateLimit(identifier: string): { allowed: boolean; remaining: number; resetInSec: number } {
+export function checkRateLimit(
+  identifier: string,
+  maxRequests = DEFAULT_MAX_REQUESTS,
+  windowMs = DEFAULT_WINDOW_MS
+): { allowed: boolean; remaining: number; resetInSec: number } {
   const now = Date.now();
   const record = rateLimitMap.get(identifier);
 
@@ -20,10 +24,10 @@ export function checkRateLimit(identifier: string): { allowed: boolean; remainin
       count: 1,
       resetAt: now + windowMs,
     });
-    return { allowed: true, remaining: maxRequestsPerWindow - 1, resetInSec: 60 };
+    return { allowed: true, remaining: maxRequests - 1, resetInSec: Math.ceil(windowMs / 1000) };
   }
 
-  if (record.count >= maxRequestsPerWindow) {
+  if (record.count >= maxRequests) {
     return {
       allowed: false,
       remaining: 0,
@@ -34,7 +38,7 @@ export function checkRateLimit(identifier: string): { allowed: boolean; remainin
   record.count += 1;
   return {
     allowed: true,
-    remaining: maxRequestsPerWindow - record.count,
+    remaining: maxRequests - record.count,
     resetInSec: Math.ceil((record.resetAt - now) / 1000),
   };
 }

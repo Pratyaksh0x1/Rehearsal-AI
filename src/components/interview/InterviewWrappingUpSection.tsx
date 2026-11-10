@@ -23,6 +23,7 @@ export function InterviewWrappingUpSection({
 }: InterviewWrappingUpSectionProps) {
   const [progress, setProgress] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
+  const hasSpokenRef = React.useRef(false);
 
   const steps = [
     'Locking code & compiling test execution suite',
@@ -31,12 +32,25 @@ export function InterviewWrappingUpSection({
     'Finalizing detailed performance score report',
   ];
 
-  // Spoken voice wrap-up
+  // Spoken voice wrap-up (guaranteed to fire only once, after active speech clears)
   useEffect(() => {
-    const wrapUpMsg = `Thanks ${candidateName}. This will be wrapping up your interview today. I'm compiling your performance metrics now, and the next scene will show your detailed report.`;
-    if (speakFn) {
-      void speakFn(wrapUpMsg);
+    if (hasSpokenRef.current) return;
+    hasSpokenRef.current = true;
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
+
+    const timer = setTimeout(async () => {
+      const wrapUpMsg = `Thank you for your time, ${candidateName}. Please go through your report, and do give us a review.`;
+      if (speakFn) {
+        try {
+          await speakFn(wrapUpMsg);
+        } catch {}
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
   }, [candidateName, speakFn]);
 
   // Animate progress over durationMs
@@ -65,16 +79,16 @@ export function InterviewWrappingUpSection({
 
   return (
     <div className="w-full max-w-xl mx-auto py-10 sm:py-16 px-4 animate-in fade-in-50 duration-300">
-      <div className="rounded-3xl border border-white/10 bg-[#161220]/95 p-6 sm:p-10 shadow-2xl relative backdrop-blur-2xl text-center">
+      <div className="rounded-2xl border border-border bg-surface p-6 sm:p-10 shadow-sm relative text-center">
         {/* Ambient glow */}
-        <div className="absolute -top-16 -right-16 w-60 h-60 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute -top-16 -right-16 w-60 h-60 rounded-full bg-accent-subtle blur-3xl pointer-events-none" />
 
         {/* Central Interviewer Portrait with wrapping up badge */}
         <div className="relative w-24 h-24 sm:w-28 sm:h-28 mx-auto mb-6 flex items-center justify-center">
-          <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#f59e0b]/40 animate-[spin_6s_linear_infinite]" />
-          <div className="absolute inset-3 rounded-full bg-amber-500/15 animate-ping" />
+          <div className="absolute inset-0 rounded-full border-2 border-dashed border-accent/40 animate-[spin_6s_linear_infinite]" />
+          <div className="absolute inset-3 rounded-full bg-accent-subtle animate-ping" />
 
-          <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden ring-2 ring-amber-500/60 shadow-[0_0_25px_rgba(245,158,11,0.3)]">
+          <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden ring-2 ring-accent/60 shadow-sm">
             <Image
               src={interviewerAvatar}
               alt={interviewerName}
@@ -83,22 +97,22 @@ export function InterviewWrappingUpSection({
             />
           </div>
 
-          <div className="absolute -bottom-2 bg-[#25171d] border border-amber-500/60 text-[#f59e0b] text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full shadow-sm">
+          <div className="absolute -bottom-2 bg-surface border border-border text-accent text-xs font-mono font-bold px-2.5 py-0.5 rounded-full shadow-sm">
             {progress}%
           </div>
         </div>
 
-        <h2 className="font-serif text-2xl sm:text-3xl font-normal text-white tracking-tight mb-2">
+        <h2 className="text-xl sm:text-2xl font-bold text-text-primary tracking-tight mb-2">
           Wrapping up your interview
         </h2>
-        <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto mb-7">
+        <p className="text-xs sm:text-sm text-text-muted max-w-md mx-auto mb-7">
           {interviewerName} is computing your algorithmic scores and generating your detailed radar report...
         </p>
 
-        {/* Metallic progress bar */}
-        <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden mb-7 border border-white/10">
+        {/* Progress bar */}
+        <div className="w-full bg-surface-hover h-2 rounded-full overflow-hidden mb-7 border border-border">
           <div
-            className="h-full bg-gradient-to-r from-amber-500 via-[#f7cf7c] to-amber-500 rounded-full transition-all duration-75 shadow-[0_0_15px_rgba(247,207,124,0.5)]"
+            className="h-full bg-accent rounded-full transition-all duration-75 shadow-sm"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -112,13 +126,12 @@ export function InterviewWrappingUpSection({
             return (
               <div
                 key={idx}
-                className={`flex items-center justify-between text-xs p-2.5 rounded-xl border transition-all ${
-                  isCurrent
+                className={`flex items-center justify-between text-xs p-2.5 rounded-xl border transition-all ${isCurrent
                     ? 'border-amber-500/40 bg-amber-500/10 text-white font-medium'
                     : isPast
-                    ? 'border-white/5 bg-white/[0.02] text-zinc-300'
-                    : 'border-transparent text-zinc-600'
-                }`}
+                      ? 'border-white/5 bg-white/[0.02] text-zinc-300'
+                      : 'border-transparent text-zinc-600'
+                  }`}
               >
                 <span>{text}</span>
                 {isPast ? (

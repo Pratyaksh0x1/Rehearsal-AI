@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type LLMProvider = 'gemini' | 'openai' | 'grok';
+export type LLMProvider = 'gemini' | 'deepseek' | 'openrouter' | 'grok';
 
 export interface Message {
   role: 'system' | 'user' | 'assistant';
@@ -38,7 +38,7 @@ export async function generate(
     (process.env.LLM_PROVIDER as LLMProvider) ||
     'gemini';
 
-  const fallbackOrder = options.fallbackOrder || ['gemini', 'openai', 'grok'];
+  const fallbackOrder = options.fallbackOrder || ['gemini', 'deepseek', 'openrouter', 'grok'];
   const orderedProviders = [
     primaryProvider,
     ...fallbackOrder.filter((p) => p !== primaryProvider),
@@ -58,9 +58,12 @@ export async function generate(
           err?.message?.includes('401') ||
           err?.message?.includes('404') ||
           err?.message?.includes('403') ||
-          err?.message?.includes('400')
+          err?.message?.includes('400') ||
+          err?.message?.includes('RESOURCE_EXHAUSTED') ||
+          err?.message?.includes('quota exceeded') ||
+          err?.message?.includes('QuotaExceeded')
         ) {
-          // Fatal auth/model error, don't retry this provider
+          // Fatal auth/quota limit error, immediately switch to the next fallback provider
           break;
         }
         if (attempt < MAX_RETRIES) {
@@ -161,6 +164,86 @@ export async function* generateStream(
     } catch (streamErr) {
       console.warn('[LLM Stream] Gemini stream error, falling back to generate():', streamErr);
     }
+  } else if (
+    primaryProvider === 'deepseek' ||
+    primaryProvider === 'openrouter' ||
+    primaryProvider === 'grok'
+  ) {
+    let streamApiKey = '';
+    let streamEndpoint = '';
+    let streamModel = '';
+    const extraHeaders: Record<string, string> = {};
+
+    if (primaryProvider === 'deepseek') {
+      streamApiKey = process.env.DEEPSEEK_API_KEY || '';
+      streamEndpoint = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/chat/completions';
+      streamModel = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+    } else if (primaryProvider === 'openrouter') {
+      streamApiKey = process.env.OPENROUTER_API_KEY || '';
+      streamEndpoint = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1/chat/completions';
+      streamModel = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat';
+      extraHeaders['HTTP-Referer'] = 'https://rehearsal-ai.com';
+      extraHeaders['X-Title'] = 'Rehearsal AI';
+    } else {
+      streamApiKey = process.env.GROK_API_KEY || '';
+      streamEndpoint = 'https://api.x.ai/v1/chat/completions';
+      streamModel = process.env.GROK_MODEL || 'grok-beta';
+    }
+
+    if (streamApiKey) {
+      try {
+        const res = await fetch(streamEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${streamApiKey}`,
+            ...extraHeaders,
+          },
+          body: JSON.stringify({
+            model: streamModel,
+            messages: messages.map((m) => ({ role: m.role, content: m.content })),
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.maxTokens ?? 1024,
+            stream: true,
+          }),
+        });
+
+        if (res.ok && res.body) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let yieldedAny = false;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('data: ')) {
+                const jsonStr = trimmed.slice(6).trim();
+                if (jsonStr === '[DONE]') break;
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  const token = parsed.choices?.[0]?.delta?.content || '';
+                  if (token) {
+                    yieldedAny = true;
+                    yield token;
+                  }
+                } catch {}
+              }
+            }
+          }
+
+          if (yieldedAny) return;
+        }
+      } catch (streamErr) {
+        console.warn(`[LLM Stream] ${primaryProvider} stream notice, falling back to generate():`, streamErr);
+      }
+    }
   }
 
   // Fallback: use standard generate and yield the full text
@@ -241,18 +324,29 @@ async function executeProvider(
     }
   }
 
-  if (provider === 'openai' || provider === 'grok') {
-    const isGrok = provider === 'grok';
-    const apiKey = isGrok ? process.env.GROK_API_KEY : process.env.OPENAI_API_KEY;
+  if (provider === 'deepseek' || provider === 'openrouter' || provider === 'grok') {
+    let apiKey: string | undefined;
+    let endpoint: string;
+    let model: string;
+    const extraHeaders: Record<string, string> = {};
+
+    if (provider === 'deepseek') {
+      apiKey = process.env.DEEPSEEK_API_KEY;
+      endpoint = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/chat/completions';
+      model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+    } else if (provider === 'openrouter') {
+      apiKey = process.env.OPENROUTER_API_KEY;
+      endpoint = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1/chat/completions';
+      model = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat';
+      extraHeaders['HTTP-Referer'] = 'https://rehearsal-ai.com';
+      extraHeaders['X-Title'] = 'Rehearsal AI';
+    } else {
+      apiKey = process.env.GROK_API_KEY;
+      endpoint = 'https://api.x.ai/v1/chat/completions';
+      model = process.env.GROK_MODEL || 'grok-beta';
+    }
+
     if (!apiKey) return null;
-
-    const endpoint = isGrok
-      ? 'https://api.x.ai/v1/chat/completions'
-      : 'https://api.openai.com/v1/chat/completions';
-
-    const model = isGrok
-      ? process.env.GROK_MODEL || 'grok-beta'
-      : process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -263,6 +357,7 @@ async function executeProvider(
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
+          ...extraHeaders,
         },
         body: JSON.stringify({
           model,

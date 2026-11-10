@@ -5,7 +5,7 @@
 :root,
 [data-theme='dark'],
 .dark {
-  /* Default to Dark Theme Tokens (LeetCode / TUF aesthetic) */
+  /* Dark Theme Tokens (Linear / Vercel / LeetCode developer aesthetic) */
   --color-bg: #0b0f19;
   --color-bg-subtle: #111726;
   --color-surface: #161e31;
@@ -13,37 +13,54 @@
   --color-surface-active: #253352;
   --color-border: #23304c;
   --color-border-strong: #38496e;
+  
+  /* Text tokens passing WCAG AA (>= 4.5:1 against dark bg and surface) */
   --color-text-primary: #f8fafc;
-  --color-text-muted: #94a3b8;
-  --color-text-subtle: #64748b;
+  --color-text-muted: #cbd5e1;
+  --color-text-subtle: #94a3b8;
+  
+  /* Single Blue Accent Token */
   --color-accent: #3b82f6;
   --color-accent-hover: #2563eb;
   --color-accent-subtle: rgba(59, 130, 246, 0.15);
   --color-accent-foreground: #ffffff;
+  
+  /* Semantic Status Tokens */
   --color-success: #10b981;
   --color-success-subtle: rgba(16, 185, 129, 0.15);
   --color-success-foreground: #ffffff;
+  
   --color-warning: #f59e0b;
   --color-warning-subtle: rgba(245, 158, 11, 0.15);
-  --color-warning-foreground: #000000;
+  --color-warning-foreground: #0b0f19;
+  
   --color-danger: #ef4444;
   --color-danger-subtle: rgba(239, 68, 68, 0.15);
   --color-danger-foreground: #ffffff;
+  
+  --color-ring: #3b82f6;
+  --color-overlay: rgba(11, 15, 25, 0.75);
 
-  /* Rank Badges Tokens */
+  /* Rank Badges Tokens (Strictly for Rank progression UI) */
   --color-rank-bronze: #cd7f32;
+  --color-rank-silver: #94a3b8;
   --color-rank-gold: #f59e0b;
   --color-rank-platinum: #38bdf8;
   --color-rank-diamond: #06b6d4;
   --color-rank-crown: #a855f7;
   --color-rank-conqueror: #ef4444;
 
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, monospace;
+  /* Radius scale */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
 }
 
 [data-theme='light'],
 .light {
+  /* Light Theme Tokens */
   --color-bg: #f8fafc;
   --color-bg-subtle: #f1f5f9;
   --color-surface: #ffffff;
@@ -51,24 +68,36 @@
   --color-surface-active: #e2e8f0;
   --color-border: #e2e8f0;
   --color-border-strong: #cbd5e1;
+  
+  /* Text tokens passing WCAG AA (>= 4.5:1 against light bg and surface) */
   --color-text-primary: #0f172a;
-  --color-text-muted: #475569;
-  --color-text-subtle: #94a3b8;
+  --color-text-muted: #334155;
+  --color-text-subtle: #475569;
+  
+  /* Single Blue Accent Token */
   --color-accent: #2563eb;
   --color-accent-hover: #1d4ed8;
   --color-accent-subtle: rgba(37, 99, 235, 0.1);
   --color-accent-foreground: #ffffff;
+  
+  /* Semantic Status Tokens */
   --color-success: #059669;
   --color-success-subtle: rgba(5, 150, 105, 0.12);
   --color-success-foreground: #ffffff;
-  --color-warning: #d97706;
-  --color-warning-subtle: rgba(217, 119, 6, 0.12);
+  
+  --color-warning: #b45309;
+  --color-warning-subtle: rgba(180, 83, 9, 0.12);
   --color-warning-foreground: #ffffff;
+  
   --color-danger: #dc2626;
   --color-danger-subtle: rgba(220, 38, 38, 0.12);
   --color-danger-foreground: #ffffff;
+  
+  --color-ring: #2563eb;
+  --color-overlay: rgba(15, 23, 42, 0.45);
 
   --color-rank-bronze: #b45309;
+  --color-rank-silver: #64748b;
   --color-rank-gold: #d97706;
   --color-rank-platinum: #0284c7;
   --color-rank-diamond: #0891b2;
@@ -110,31 +139,34 @@ code, pre, .font-mono {
   background: var(--color-text-subtle);
 }
 
-/* Luxury Multi-Speed Animation Utilities */
+/* Accessible focus ring utility */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Animations */
 @keyframes float-slow {
   0%, 100% {
     transform: translateY(0px) rotate(0deg);
   }
   50% {
     transform: translateY(-16px) rotate(1.5deg);
-  }
-}
-
-@keyframes float-medium {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-10px) rotate(-1deg);
-  }
-}
-
-@keyframes float-fast {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-6px);
   }
 }
 
@@ -153,47 +185,67 @@ code, pre, .font-mono {
   animation: float-slow 9s ease-in-out infinite;
 }
 
-.animate-float-medium {
-  animation: float-medium 5.5s ease-in-out infinite;
-}
-
-.animate-float-fast {
-  animation: float-fast 3.2s ease-in-out infinite;
-}
-
 .animate-pulse-glow {
   animation: pulse-glow 6s ease-in-out infinite;
 }
 
-/* Glassmorphism Luxury Utilities */
-.glass-pill {
-  background: rgba(15, 23, 42, 0.72);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+.sketchbook-board {
+  border-color: #49321e;
+  box-shadow: inset 0 0 0 2px rgba(255, 227, 173, 0.22), 0 18px 40px rgba(0, 0, 0, 0.32);
 }
 
-.glass-card-luxury {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+.sketchbook-board > :first-child,
+.sketchbook-board > :last-child {
+  background-image: linear-gradient(135deg, #55391f, #291a10 48%, #624325);
 }
 
-[data-theme='light'] .glass-pill,
-.light .glass-pill {
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.03);
+.sketchbook-page {
+  color: #29352d;
+  background-color: #f7f1df;
+  background-image:
+    linear-gradient(90deg, transparent 0, transparent 34px, rgba(191, 82, 71, 0.18) 35px, transparent 37px),
+    repeating-linear-gradient(180deg, transparent 0, transparent 30px, rgba(82, 112, 132, 0.14) 31px, transparent 32px);
 }
 
-[data-theme='light'] .glass-card-luxury,
-.light .glass-card-luxury {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+.sketchbook-content {
+  color: #29352d;
+  font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
 }
 
+.sketchbook-content [class*="text-emerald"],
+.sketchbook-content [class*="text-slate"],
+.sketchbook-content [class*="text-white"] {
+  color: #344f40 !important;
+}
 
+.sketchbook-content [class*="text-amber"] {
+  color: #795b27 !important;
+}
+
+.sketchbook-content [class*="bg-black"] {
+  background-color: rgba(255, 255, 255, 0.52) !important;
+}
+
+.sketchbook-content [class*="bg-emerald-950"] {
+  background-color: rgba(91, 126, 91, 0.12) !important;
+}
+
+.sketchbook-content [class*="border-emerald"] {
+  border-color: rgba(70, 105, 78, 0.3) !important;
+}
+
+.sketchbook-diagram {
+  color: #29352d;
+  background-color: rgba(255, 253, 245, 0.88);
+  border: 1px solid rgba(83, 112, 86, 0.35);
+  font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+}
+
+.sketchbook-diagram__svg > svg {
+  display: block;
+  width: 100% !important;
+  max-width: 100%;
+  min-height: 260px;
+  height: auto !important;
+  margin-inline: auto;
+}

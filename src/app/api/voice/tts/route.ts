@@ -1,23 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { synthesizeSpeech, GnaniError } from '@/lib/voice/gnani';
 import { checkRateLimit } from '@/lib/llm/rate-limit';
+import { requireUser } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get('x-forwarded-for') || 'local-client';
-    const rate = checkRateLimit(`voice-tts-${ip}`);
+    const { user: authUser, error: authError } = await requireUser();
+    if (authError || !authUser) {
+      return NextResponse.json(
+        { error: 'Unauthorized: login required' },
+        { status: 401 }
+      );
+    }
+
+    const rate = checkRateLimit(`voice-tts-${authUser.id}`, 180);
     if (!rate.allowed) {
       return NextResponse.json({ error: `Rate limit exceeded. Try again in ${rate.resetInSec}s` }, { status: 429 });
     }
 
-    const { text, voice, model, voiceId } = await req.json();
+    const { text, voice, model, voiceId, language } = await req.json();
     if (!text || typeof text !== 'string') {
       return NextResponse.json({ error: 'Text is required for TTS' }, { status: 400 });
     }
 
-    const r = await synthesizeSpeech(text.slice(0, 700), voice || voiceId, model);
+    const r = await synthesizeSpeech(text.slice(0, 700), voice || voiceId, model, language);
     return new NextResponse(new Uint8Array(r.audioBuffer), {
       headers: {
         'Content-Type': r.contentType,

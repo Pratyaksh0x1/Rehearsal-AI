@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Navbar } from '@/components/layout/Navbar';
-import { VoicePanel } from '@/components/voice/VoicePanel';
+import { VoicePanel, VoiceStateLabel } from '@/components/voice/VoicePanel';
+import { sendChatMessage } from '@/lib/interview/chatClient';
 import { EvaluationModal } from '@/components/interview/EvaluationModal';
 import { ProctorCamera } from '@/components/interview/ProctorCamera';
 import { InterviewTimer, resetInterviewTimer } from '@/components/interview/InterviewTimer';
@@ -19,10 +20,21 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { AI_PANELISTS, getRandomAgent, AIPanelist } from '@/config/panels';
+import { AuthGate } from '@/components/auth/AuthGate';
+import { checkProfanity } from '@/lib/moderation/profanity';
+import { ConductWarningBanner } from '@/components/interview/ConductWarningBanner';
 
 const TOTAL_HR_QUESTIONS = 5;
 
 export default function HRRoundPage() {
+  return (
+    <AuthGate>
+      <HRRoundContent />
+    </AuthGate>
+  );
+}
+
+function HRRoundContent() {
   const { user } = useAuth();
 
   // Random HR interviewer picked per session (e.g. Shubhra, Meera, Tia)
@@ -34,6 +46,12 @@ export default function HRRoundPage() {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluation, setEvaluation] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
+  const [showCaptions, setShowCaptions] = useState(false);
+  const [voiceState, setVoiceState] = useState<VoiceStateLabel>('Mic Off');
+  const [volumeLevel, setVolumeLevel] = useState(0);
+  const [conductWarning, setConductWarning] = useState<{ isOpen: boolean; matchedWord?: string }>({
+    isOpen: false,
+  });
 
   // Silence & pause detector state refs
   const lastActiveTimeRef = useRef(Date.now());
@@ -100,100 +118,62 @@ export default function HRRoundPage() {
   ): Promise<string> => {
     updateActivity();
 
+    // Check for abusive or profane language
+    const profCheck = checkProfanity(userText);
+    if (profCheck.hasProfanity) {
+      setConductWarning({ isOpen: true, matchedWord: profCheck.matchedWord });
+      const conductReminder =
+        "Please maintain respectful and professional communication throughout this interview round.";
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: userText },
+        { role: 'assistant', content: conductReminder },
+      ]);
+      return conductReminder;
+    }
+
     const updatedMessages = [...messages, { role: 'user' as const, content: userText }];
     setMessages(updatedMessages);
     setIsProcessing(true);
     captureEvent('hr_user_message_sent', { questionCount });
 
-    try {
-      const isFinalQuestion = questionCount >= TOTAL_HR_QUESTIONS;
-      const wantsStream = Boolean(options?.onChunk);
+    const isFinalQuestion = questionCount >= TOTAL_HR_QUESTIONS;
 
-      const res = await fetch('/api/interviews/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(wantsStream ? { Accept: 'text/event-stream' } : {}),
-        },
-        signal: options?.signal,
-        body: JSON.stringify({
+    try {
+      const reply = await sendChatMessage({
+        body: {
           messages: [
             ...updatedMessages,
             {
               role: 'user',
-              content: `[Context: Candidate answered Question ${questionCount} of ${TOTAL_HR_QUESTIONS}. ${isFinalQuestion
+              content: `[Context: Candidate answered Question ${questionCount} of ${TOTAL_HR_QUESTIONS}. ${
+                isFinalQuestion
                   ? 'All 5 questions are complete! Congratulate the candidate, provide a positive closing remark, and invite them to click "Finish & Evaluate" for their STAR report.'
-                  : `Briefly acknowledge their STAR points (1-2 sentences), then dynamically generate Question ${questionCount + 1
-                  } of ${TOTAL_HR_QUESTIONS} exploring ownership, ambiguity, deadlines, or technical leadership.`
-                }]`,
+                  : `Briefly acknowledge their STAR points (1-2 sentences), then dynamically generate Question ${
+                      questionCount + 1
+                    } of ${TOTAL_HR_QUESTIONS} exploring ownership, ambiguity, deadlines, or technical leadership.`
+              }]`,
             },
           ],
           type: 'HR',
-          stream: wantsStream,
           resumeSnippet: user?.resumeText?.slice(0, 1500) || '',
           interviewerName: hrInterviewer.name,
           interviewerRole: hrInterviewer.role,
           interviewerPersonality: hrInterviewer.personality,
-        }),
+        },
+        signal: options?.signal,
+        onChunk: options?.onChunk,
+        fallbackReply: isFinalQuestion
+          ? 'Thank you for completing all questions! Please click "Finish & Evaluate" to view your behavioral evaluation report.'
+          : `Thank you for sharing that context. For Question ${
+              questionCount + 1
+            }: Can you describe a project where requirements shifted unexpectedly, and how you adapted?`,
       });
 
-      if (wantsStream && res.ok && res.body) {
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullReply = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const jsonStr = line.slice(6).trim();
-              if (jsonStr) {
-                try {
-                  const parsed = JSON.parse(jsonStr);
-                  if (parsed.token) {
-                    fullReply += parsed.token;
-                    options?.onChunk?.(parsed.token);
-                  } else if (parsed.done && parsed.fullText) {
-                    fullReply = parsed.fullText;
-                  }
-                } catch {
-                  // ignore
-                }
-              }
-            }
-          }
-        }
-
-        const reply = fullReply || (isFinalQuestion
-          ? 'Thank you for completing all questions! Please click "Finish & Evaluate" to view your behavioral evaluation report.'
-          : `Thank you for sharing that context. For Question ${questionCount + 1}: Can you describe a project where requirements shifted unexpectedly, and how you adapted?`);
-
-        setMessages([...updatedMessages, { role: 'assistant', content: reply }]);
-        if (questionCount < TOTAL_HR_QUESTIONS) {
-          setQuestionCount((prev) => prev + 1);
-        }
-        return reply;
-      }
-
-      const data = await res.json();
-      const reply =
-        data.reply ||
-        (isFinalQuestion
-          ? 'Thank you for completing all questions! Please click "Finish & Evaluate" to view your behavioral evaluation report.'
-          : `Thank you for sharing that context. For Question ${questionCount + 1}: Can you describe a project where requirements shifted unexpectedly, and how you adapted?`);
-
       setMessages([...updatedMessages, { role: 'assistant', content: reply }]);
-
       if (questionCount < TOTAL_HR_QUESTIONS) {
         setQuestionCount((prev) => prev + 1);
       }
-
       return reply;
     } catch (err: any) {
       if (err?.name === 'AbortError') {
@@ -242,8 +222,16 @@ export default function HRRoundPage() {
   };
 
   return (
-    <div className="min-h-screen bg-bg text-text-primary flex flex-col transition-colors">
-      <Navbar />
+    <div className="min-h-screen bg-bg text-text-primary flex flex-col transition-colors relative">
+      {/* Hide Navbar during active live interview */}
+      {showModal && <Navbar />}
+
+      {/* Real-time Conduct / Profanity Warning Banner */}
+      <ConductWarningBanner
+        isOpen={conductWarning.isOpen}
+        matchedWord={conductWarning.matchedWord}
+        onDismiss={() => setConductWarning({ isOpen: false })}
+      />
 
       <main className="flex-1 max-w-[1680px] w-full mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
         {/* Top Header Card */}
@@ -261,7 +249,7 @@ export default function HRRoundPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <InterviewTimer totalMinutes={45} interviewKey="hr" />
+            <InterviewTimer totalMinutes={10} interviewKey="hr" />
 
             <span className="text-xs font-mono font-semibold px-3 py-1 rounded-full bg-bg border border-border text-text-muted">
               Question {Math.min(questionCount, TOTAL_HR_QUESTIONS)} of {TOTAL_HR_QUESTIONS}
@@ -359,43 +347,124 @@ export default function HRRoundPage() {
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent-subtle text-accent border border-accent/20">
-                    Gnani {hrInterviewer.model}
+                <div className="flex items-center gap-2">
+                  {/* Captions toggle - off by default */}
+                  <button
+                    type="button"
+                    onClick={() => setShowCaptions(!showCaptions)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-mono flex items-center gap-1 border transition-all ${
+                      showCaptions
+                        ? 'bg-accent/20 border-accent/40 text-accent font-semibold'
+                        : 'bg-bg text-text-muted border-border hover:text-text-primary'
+                    }`}
+                    title="Toggle speech captions"
+                  >
+                    <span>CC</span>
+                    <span>{showCaptions ? 'Captions On' : 'Captions Off'}</span>
+                  </button>
+
+                  <span
+                    className={`text-[10px] font-mono font-semibold px-2.5 py-1 rounded-full border transition-all ${
+                      voiceState === 'Speaking'
+                        ? 'bg-accent/20 border-accent text-accent animate-pulse font-bold'
+                        : voiceState === 'Thinking'
+                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-500 animate-pulse'
+                        : voiceState === 'Heard you'
+                        ? 'bg-teal-500/20 border-teal-400 text-teal-400 animate-pulse'
+                        : voiceState === 'Listening'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                        : 'bg-bg text-text-subtle border-border'
+                    }`}
+                  >
+                    {voiceState}
                   </span>
                 </div>
               </div>
 
-              {/* Chat Transcript */}
-              <div className="space-y-3 max-h-[440px] overflow-y-auto pr-1">
-                {messages.map((m, idx) => (
+              {/* Voice-First Experience: Hero Avatar & Reactive Sound Orb */}
+              <div className="py-8 px-4 flex flex-col items-center justify-center gap-4 bg-bg/50 rounded-2xl border border-border/60">
+                <div className="relative">
+                  {/* Ambient soundwave halo */}
                   <div
-                    key={idx}
-                    className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'
-                      }`}
-                  >
-                    <span className="text-[10px] font-mono text-text-subtle mb-1">
-                      {m.role === 'user' ? 'You (Candidate)' : hrInterviewer.name}
-                    </span>
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed ${m.role === 'user'
-                          ? 'bg-accent text-accent-foreground'
-                          : 'bg-bg text-text-primary border border-border'
-                        }`}
-                    >
-                      {m.content}
-                    </div>
+                    className={`absolute -inset-3 rounded-full transition-all duration-300 pointer-events-none ${
+                      voiceState === 'Speaking'
+                        ? 'bg-accent/30 blur-xl scale-110 animate-pulse'
+                        : voiceState === 'Thinking'
+                        ? 'bg-amber-400/25 blur-xl scale-105'
+                        : voiceState === 'Heard you' || (voiceState === 'Listening' && volumeLevel > 15)
+                        ? 'bg-emerald-500/30 blur-xl scale-110'
+                        : 'bg-transparent'
+                    }`}
+                  />
+
+                  <div className={`relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-2 transition-all duration-300 shadow-xl ${
+                    voiceState === 'Speaking'
+                      ? 'border-accent ring-4 ring-accent/30 scale-105'
+                      : voiceState === 'Thinking'
+                      ? 'border-amber-400 ring-4 ring-amber-400/30'
+                      : voiceState === 'Heard you' || (voiceState === 'Listening' && volumeLevel > 15)
+                      ? 'border-emerald-400 ring-4 ring-emerald-400/30 scale-105'
+                      : 'border-border ring-1 ring-border'
+                  }`}>
+                    <Image
+                      src={hrInterviewer.avatarUrl}
+                      alt={hrInterviewer.name}
+                      fill
+                      className="object-cover"
+                      priority
+                    />
                   </div>
-                ))}
-                {isProcessing && (
-                  <div className="flex items-center gap-2 text-xs text-text-subtle italic">
-                    <span className="inline-block w-2 h-2 rounded-full bg-accent animate-ping" />
-                    {hrInterviewer.name} is evaluating your response...
-                  </div>
-                )}
+                </div>
+
+                <div className="text-center space-y-1">
+                  <h4 className="font-bold text-base text-text-primary">
+                    {hrInterviewer.name}
+                  </h4>
+                  <p className="text-xs text-text-muted font-mono">
+                    {voiceState === 'Speaking'
+                      ? `${hrInterviewer.name} is speaking...`
+                      : voiceState === 'Thinking'
+                      ? 'Thinking & evaluating STAR context...'
+                      : voiceState === 'Heard you'
+                      ? 'Processing your answer...'
+                      : voiceState === 'Listening'
+                      ? 'Listening for your response...'
+                      : 'Microphone inactive'}
+                  </p>
+                </div>
               </div>
 
-              {/* Live Voice & Audio Controls (Strict No-Barge-In with Automatic Voice Activity Detection) */}
+              {/* Optional Captions Drawer (Only shown when toggled ON) */}
+              {showCaptions && (
+                <div className="space-y-2 max-h-48 overflow-y-auto p-3 rounded-xl bg-bg border border-border text-xs leading-relaxed">
+                  <div className="text-[10px] font-mono text-text-subtle uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Live Captions (Accessibility)</span>
+                    <button
+                      onClick={() => setShowCaptions(false)}
+                      className="hover:underline text-text-muted"
+                    >
+                      Hide
+                    </button>
+                  </div>
+                  {messages.slice(-3).map((m, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-2 rounded-lg ${
+                        m.role === 'user'
+                          ? 'bg-accent/10 border border-accent/20 text-accent font-medium'
+                          : 'bg-surface border border-border text-text-primary'
+                      }`}
+                    >
+                      <strong className="block text-[10px] uppercase font-mono mb-0.5 text-text-muted">
+                        {m.role === 'user' ? 'You' : hrInterviewer.name}
+                      </strong>
+                      <p>{m.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Live Voice & Audio Controls */}
               <VoicePanel
                 onSendMessage={handleUserMessage}
                 isProcessing={isProcessing}
@@ -404,6 +473,10 @@ export default function HRRoundPage() {
                 model={hrInterviewer.model}
                 voiceId={hrInterviewer.voiceId}
                 initialMessage={messages[0]?.content}
+                onStateChange={(state, volume) => {
+                  setVoiceState(state);
+                  setVolumeLevel(volume);
+                }}
               />
             </div>
           </div>

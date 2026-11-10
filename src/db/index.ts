@@ -2,13 +2,20 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';
 
+export const getCleanDatabaseUrl = (): string | undefined => {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return undefined;
+  return raw.trim().replace(/^["']|["']$/g, '');
+};
+
 export const isDatabaseConfigured = (): boolean => {
-  const url = process.env.DATABASE_URL;
+  const url = getCleanDatabaseUrl();
   return Boolean(
     url &&
-      url.startsWith('postgres') &&
+      (url.startsWith('postgres://') || url.startsWith('postgresql://')) &&
       !url.includes('[PASSWORD]') &&
-      !url.includes('[HOST]')
+      !url.includes('[HOST]') &&
+      !url.includes('placeholder')
   );
 };
 
@@ -19,10 +26,15 @@ const globalForDb = globalThis as unknown as {
 
 function createDbClient() {
   if (!isDatabaseConfigured()) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(
+        '⚠️ DATABASE_URL is not configured or contains placeholder values. Database persistence is disabled.'
+      );
+    }
     return null;
   }
 
-  const connectionString = process.env.DATABASE_URL!;
+  const connectionString = getCleanDatabaseUrl()!;
 
   // When connecting via Supabase connection pooler (port 6543 / Transaction mode),
   // prepare: false is required to avoid prepared statement caching conflicts.

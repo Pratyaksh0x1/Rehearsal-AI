@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
-import { RANK_ORDER, RankTier, getRankDefinition } from '@/config/ranks';
+import { getRankDefinition } from '@/config/ranks';
 import {
   Trophy,
   ChevronLeft,
@@ -16,6 +16,7 @@ import {
   Sparkles,
   Info,
 } from 'lucide-react';
+import { AuthGate } from '@/components/auth/AuthGate';
 
 interface LeaderboardUser {
   position: number;
@@ -28,8 +29,15 @@ interface LeaderboardUser {
 }
 
 export default function LeaderboardPage() {
+  return (
+    <AuthGate>
+      <LeaderboardContent />
+    </AuthGate>
+  );
+}
+
+function LeaderboardContent() {
   const [activeLeague, setActiveLeague] = useState<'technical' | 'hr'>('technical');
-  const [selectedTier, setSelectedTier] = useState<string>('All');
   const [page, setPage] = useState(1);
   const [leaderboardData, setLeaderboardData] = useState<{
     items: LeaderboardUser[];
@@ -44,9 +52,8 @@ export default function LeaderboardPage() {
     async function fetchLeaderboard() {
       setIsLoading(true);
       try {
-        const queryTier = selectedTier === 'All' ? '' : `&tier=${selectedTier}`;
         const res = await fetch(
-          `/api/leaderboard?league=${activeLeague}&page=${page}&limit=10${queryTier}`
+          `/api/leaderboard?league=${activeLeague}&page=${page}&limit=10`
         );
         if (res.ok) {
           const data = await res.json();
@@ -59,7 +66,7 @@ export default function LeaderboardPage() {
       }
     }
     fetchLeaderboard();
-  }, [activeLeague, selectedTier, page]);
+  }, [activeLeague, page]);
 
   return (
     <div className="min-h-screen bg-bg text-text-primary flex flex-col transition-colors">
@@ -131,41 +138,6 @@ export default function LeaderboardPage() {
           </p>
         </div>
 
-        {/* Tier Filter Tabs */}
-        <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-4 gap-2 mb-8">
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedTier('All');
-              setPage(1);
-            }}
-            className={`px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all flex-shrink-0 ${
-              selectedTier === 'All'
-                ? 'bg-accent text-accent-foreground shadow-sm'
-                : 'bg-surface border border-border text-text-muted hover:text-text-primary'
-            }`}
-          >
-            All Tiers
-          </button>
-          {RANK_ORDER.map((tier) => (
-            <button
-              key={tier}
-              type="button"
-              onClick={() => {
-                setSelectedTier(tier);
-                setPage(1);
-              }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold font-mono transition-all flex-shrink-0 ${
-                selectedTier === tier
-                  ? 'bg-accent text-accent-foreground shadow-sm'
-                  : 'bg-surface border border-border text-text-muted hover:text-text-primary'
-              }`}
-            >
-              {tier}
-            </button>
-          ))}
-        </div>
-
         {/* Leaderboard Table Container */}
         <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
@@ -188,7 +160,7 @@ export default function LeaderboardPage() {
                 ) : leaderboardData.items.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="py-12 text-center text-text-subtle">
-                      No candidates found in this tier yet.
+                      No candidates found on the leaderboard yet.
                     </td>
                   </tr>
                 ) : (

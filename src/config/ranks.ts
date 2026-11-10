@@ -74,10 +74,21 @@ export const RANK_ORDER: RankTier[] = ['Bronze', 'Gold', 'Platinum', 'Diamond', 
  * Returns rank definition for a tier. Defaults to Bronze.
  */
 export function getRankDefinition(tier?: string | null): RankDefinition {
-  if (!tier || !(tier in RANKS)) {
+  if (!tier) {
     return RANKS.Bronze;
   }
-  return RANKS[tier as RankTier];
+  const t = tier.trim().toLowerCase();
+  if (t === 'soldier' || t === 'bronze') return RANKS.Bronze;
+  if (t === 'knight' || t === 'gold') return RANKS.Gold;
+  if (t === 'platinum') return RANKS.Platinum;
+  if (t === 'diamond') return RANKS.Diamond;
+  if (t === 'crown') return RANKS.Crown;
+  if (t === 'conqueror') return RANKS.Conqueror;
+
+  if (tier in RANKS) {
+    return RANKS[tier as RankTier];
+  }
+  return RANKS.Bronze;
 }
 
 /**

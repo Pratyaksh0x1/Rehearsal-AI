@@ -57,8 +57,8 @@ export const FORMAT_OPTIONS = [
     pairName: 'Samarth or Riddhi',
     role: 'Senior engineers',
     difficulty: 'Medium',
-    duration: '25 min',
-    durationMinutes: 25,
+    duration: '20 min',
+    durationMinutes: 20,
     isSuggested: false,
     suggestedHint: 'Medium: A real company round. Wants specifics, not claims.',
     avatars: [
@@ -72,8 +72,8 @@ export const FORMAT_OPTIONS = [
     pairName: 'Vivan or Shreya',
     role: 'Principal engineers',
     difficulty: 'Hard',
-    duration: '30 min',
-    durationMinutes: 30,
+    duration: '20 min',
+    durationMinutes: 20,
     isSuggested: false,
     suggestedHint: 'Hard: Principal-level problem solving, edge cases, and deep complexity.',
     avatars: [
@@ -174,15 +174,12 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
         </div>
       </div>
 
-      {/* Main Configuration Card matching screenshot */}
-      <div className="rounded-3xl border border-border bg-surface p-6 sm:p-9 shadow-2xl relative backdrop-blur-2xl dark:bg-[#14101e]/90 dark:border-white/10 dark:shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
-        {/* Subtle ambient warm glow in background */}
-        <div className="absolute top-0 right-1/4 w-80 h-80 rounded-full bg-amber-500/5 blur-3xl pointer-events-none" />
-
+      {/* Main Configuration Card */}
+      <div className="rounded-2xl border border-border bg-surface p-6 sm:p-9 shadow-sm relative">
         <div className="space-y-8 relative z-10">
           {/* 1. Format Selection */}
           <div>
-            <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 uppercase tracking-wider mb-3.5">
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-3.5">
               Format
             </label>
 
@@ -194,16 +191,16 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
                   <div
                     key={format.id}
                     onClick={() => setSelectedFormat(format.id)}
-                    className={`relative rounded-2xl p-5 flex flex-col items-center justify-between text-center cursor-pointer transition-all duration-200 select-none ${
+                    className={`relative rounded-xl p-5 flex flex-col items-center justify-between text-center cursor-pointer transition-all duration-150 select-none ${
                       isSelected
-                        ? 'border-2 border-[#e0a055] bg-amber-50/40 dark:bg-[#201518]/90 shadow-[0_0_25px_rgba(224,160,85,0.18)] scale-[1.01]'
-                        : 'border border-border bg-card/60 dark:border-white/10 dark:bg-white/[0.02] hover:border-border-hover dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-white/[0.04]'
+                        ? 'border-2 border-accent bg-accent-subtle shadow-sm'
+                        : 'border border-border bg-bg-subtle hover:border-border-strong hover:bg-surface-hover'
                     }`}
                   >
                     {/* Suggested Badge */}
                     {format.isSuggested && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
-                        <span className="bg-[#3d2c18] text-[#f59e0b] border border-[#f59e0b]/50 text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+                        <span className="bg-accent text-accent-foreground text-xs font-semibold px-2.5 py-0.5 rounded-full shadow-sm">
                           Suggested
                         </span>
                       </div>
@@ -211,7 +208,7 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
 
                     {/* Overlapping Avatars */}
                     <div className="flex items-center justify-center pt-2 mb-3">
-                      <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-purple-900/60 dark:ring-[#2d1b24] shadow-md z-0">
+                      <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-border shadow-sm z-0">
                         <Image
                           src={format.avatars[0].src}
                           alt={format.avatars[0].name}
@@ -219,7 +216,7 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
                           className="object-cover"
                         />
                       </div>
-                      <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-purple-900/60 dark:ring-[#2d1b24] shadow-md -ml-3 z-10">
+                      <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-border shadow-sm -ml-3 z-10">
                         <Image
                           src={format.avatars[1].src}
                           alt={format.avatars[1].name}
@@ -234,13 +231,13 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
                       <h3
                         className={`text-sm sm:text-base font-semibold ${
                           isSelected
-                            ? 'text-text-primary dark:text-white'
-                            : 'text-text-primary dark:text-zinc-200'
+                            ? 'text-text-primary'
+                            : 'text-text-primary'
                         }`}
                       >
                         {format.pairName}
                       </h3>
-                      <p className="text-xs text-text-muted dark:text-zinc-400 mt-0.5">
+                      <p className="text-xs text-text-muted mt-0.5">
                         {format.role}
                       </p>
                     </div>
@@ -249,11 +246,11 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
                     <div
                       className={`w-full pt-3 border-t text-xs font-medium flex items-center justify-center gap-1.5 ${
                         isSelected
-                          ? 'border-amber-500/20 text-[#e0a055] font-semibold'
-                          : 'border-border dark:border-white/10 text-text-muted dark:text-zinc-400'
+                          ? 'border-accent/30 text-accent font-semibold'
+                          : 'border-border text-text-muted'
                       }`}
                     >
-                      <span className={isSelected ? 'text-[#f59e0b] font-bold' : ''}>
+                      <span className={isSelected ? 'text-accent font-bold' : ''}>
                         {format.difficulty}
                       </span>
                       <span>·</span>
@@ -265,15 +262,15 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
             </div>
 
             {/* Dynamic Suggestion/Hint Subtext */}
-            <div className="mt-3.5 flex items-center gap-2 text-xs sm:text-sm text-[#e0a055] dark:text-[#f6ad55]">
-              <Sparkles className="w-3.5 h-3.5 flex-shrink-0 text-amber-500" />
+            <div className="mt-3.5 flex items-center gap-2 text-xs sm:text-sm text-text-muted">
+              <Sparkles className="w-3.5 h-3.5 flex-shrink-0 text-accent" />
               <span>{activeFormat.suggestedHint}</span>
             </div>
           </div>
 
           {/* 2. Company Selector */}
           <div>
-            <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
               Company
             </label>
 
@@ -281,19 +278,19 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
               <button
                 type="button"
                 onClick={() => setIsCompanyDropdownOpen(!isCompanyDropdownOpen)}
-                className="w-full rounded-2xl bg-slate-50 dark:bg-[#0f0c1e] border border-border dark:border-white/10 px-4 py-3.5 text-sm text-text-primary dark:text-white flex items-center justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/40 hover:border-border-hover dark:hover:border-white/20 transition-all shadow-sm"
+                className="w-full rounded-xl bg-surface border border-border px-4 py-3.5 text-sm text-text-primary flex items-center justify-between cursor-pointer focus-ring hover:border-border-strong transition-all shadow-sm"
               >
                 <span className="font-medium">{selectedCompany}</span>
                 <ChevronDown
-                  className={`w-4 h-4 text-text-muted dark:text-zinc-400 transition-transform duration-200 ${
-                    isCompanyDropdownOpen ? 'rotate-180 text-amber-500' : ''
+                  className={`w-4 h-4 text-text-subtle transition-transform duration-200 ${
+                    isCompanyDropdownOpen ? 'rotate-180 text-accent' : ''
                   }`}
                 />
               </button>
 
               {/* Dropdown Menu */}
               {isCompanyDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl bg-surface dark:bg-[#161226] border border-border dark:border-white/15 shadow-2xl overflow-hidden py-1.5 max-h-64 overflow-y-auto backdrop-blur-xl animate-in fade-in-50 zoom-in-95 duration-150">
+                <div className="absolute top-full left-0 right-0 mt-2 z-dropdown rounded-xl bg-surface border border-border shadow-xl overflow-hidden py-1.5 max-h-64 overflow-y-auto backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
                   {COMPANIES_LIST.map((comp) => {
                     const isCompSelected = selectedCompany === comp;
                     return (
@@ -306,12 +303,12 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
                         }}
                         className={`w-full px-4 py-2.5 text-left text-sm flex items-center justify-between transition-colors ${
                           isCompSelected
-                            ? 'bg-amber-500/10 text-amber-600 dark:text-[#f6ad55] font-semibold'
-                            : 'text-text-primary dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-white/5'
+                            ? 'bg-accent-subtle text-accent font-semibold'
+                            : 'text-text-primary hover:bg-surface-hover'
                         }`}
                       >
                         <span>{comp}</span>
-                        {isCompSelected && <Check className="w-4 h-4 text-amber-500" />}
+                        {isCompSelected && <Check className="w-4 h-4 text-accent" />}
                       </button>
                     );
                   })}
@@ -322,7 +319,7 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
 
           {/* 3. Language Selector */}
           <div>
-            <label className="block text-xs font-semibold text-text-muted dark:text-zinc-400 uppercase tracking-wider mb-2.5">
+            <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2.5">
               Language
             </label>
 
@@ -335,10 +332,10 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
                     key={lang}
                     type="button"
                     onClick={() => setSelectedLanguage(lang)}
-                    className={`rounded-2xl py-3 px-4 text-sm font-medium transition-all duration-150 cursor-pointer text-center select-none ${
+                    className={`rounded-xl py-3 px-4 text-sm font-medium transition-all duration-150 cursor-pointer text-center select-none focus-ring ${
                       isSelected
-                        ? 'border-2 border-[#e0a055] bg-[#221815] text-[#f6ad55] font-semibold shadow-[0_0_18px_rgba(224,160,85,0.22)]'
-                        : 'border border-border dark:border-white/10 bg-slate-50 dark:bg-[#0f0c1e] text-text-muted dark:text-zinc-300 hover:border-border-hover dark:hover:border-white/25 hover:text-text-primary dark:hover:text-white'
+                        ? 'border-2 border-accent bg-accent-subtle text-accent font-semibold shadow-sm'
+                        : 'border border-border bg-surface text-text-muted hover:border-border-strong hover:text-text-primary hover:bg-surface-hover'
                     }`}
                   >
                     {lang}
@@ -349,19 +346,19 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
           </div>
 
           {/* 4. Bottom Note Banner */}
-          <div className="rounded-2xl bg-[#1b151a] border border-[#3b2a26] p-4 text-xs sm:text-sm text-[#c8a98b] font-normal leading-relaxed shadow-inner">
-            Leave it on <span className="text-[#f59e0b] font-medium">Any company</span>, or pick one to practise the topics reported in its interviews.
+          <div className="rounded-xl bg-bg-subtle border border-border p-4 text-xs sm:text-sm text-text-muted font-normal leading-relaxed">
+            Leave it on <span className="text-text-primary font-semibold">Any company</span>, or pick one to practise the topics reported in its interviews.
           </div>
 
           {/* 5. Start Interview Action Button */}
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-xs text-text-muted dark:text-zinc-400">
+            <div className="text-xs text-text-muted">
               Session length:{' '}
-              <span className="font-semibold text-text-primary dark:text-zinc-200">
+              <span className="font-semibold text-text-primary">
                 {activeFormat.duration}
               </span>{' '}
               · Interviewer:{' '}
-              <span className="font-semibold text-text-primary dark:text-zinc-200">
+              <span className="font-semibold text-text-primary">
                 {activeFormat.pairName}
               </span>
             </div>
@@ -369,7 +366,7 @@ export function TechnicalRoundSetup({ onBack, onStart }: TechnicalRoundSetupProp
             <button
               type="button"
               onClick={handleStartInterview}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-full font-bold text-slate-950 text-sm sm:text-base bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-300 hover:to-orange-400 shadow-xl hover:shadow-amber-500/25 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer group active:scale-95"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-lg font-semibold text-accent-foreground text-sm sm:text-base bg-accent hover:bg-accent-hover shadow-sm transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer group active:scale-95 focus-ring"
             >
               <span>Continue</span>
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />

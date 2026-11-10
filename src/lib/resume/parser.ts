@@ -1,6 +1,4 @@
 import pdfParse from 'pdf-parse';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
 
 export const MAX_RESUME_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -10,6 +8,10 @@ export interface ResumeParseResult {
   wordCount: number;
 }
 
+/**
+ * Extracts text from the uploaded PDF resume.
+ * Security: Does not store raw PDFs in public web directories to protect candidate PII.
+ */
 export async function parseAndSaveResume(
   fileBuffer: Buffer,
   fileName: string,
@@ -39,22 +41,11 @@ export async function parseAndSaveResume(
     throw new Error('Unable to extract text from PDF. The document may be encrypted or image-only.');
   }
 
-  // 4. Save file to storage (local uploads directory or object storage)
-  const uploadsDir = join(process.cwd(), 'public', 'uploads', 'resumes');
-  await mkdir(uploadsDir, { recursive: true });
-
-  const safeName = `${userId}_${Date.now()}.pdf`;
-  const filePath = join(uploadsDir, safeName);
-  await writeFile(filePath, fileBuffer);
-
-  const publicUrl = `/uploads/resumes/${safeName}`;
-
   const wordCount = extractedText.split(/\s+/).filter(Boolean).length;
 
   return {
     text: extractedText,
-    url: publicUrl,
+    url: '', // Stop storing raw PDFs in public web directory; store extracted text only
     wordCount,
   };
 }
-

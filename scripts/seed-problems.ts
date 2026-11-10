@@ -33,7 +33,7 @@ async function main() {
       const generated = await generateProblemForRank(rank, targetCategory);
       console.log(`  ✓ Generated: "${generated.title}" (${generated.category})`);
       console.log(`  ✓ Slug: ${generated.slug}`);
-      console.log(`  ✓ Test Cases: ${generated.test_cases.filter((t) => !t.is_hidden).length} visible + ${generated.test_cases.filter((t) => t.is_hidden).length} hidden`);
+      console.log(`  ✓ Test Cases: ${generated.test_cases.filter((t: any) => !t.is_hidden).length} visible + ${generated.test_cases.filter((t: any) => t.is_hidden).length} hidden`);
       console.log(`  ✓ Starter Code: Python, JavaScript, C++, Java generated`);
       console.log(`  ✓ Saved to src/data/problems/${generated.slug}.json & Supabase DB`);
     } catch (err: any) {

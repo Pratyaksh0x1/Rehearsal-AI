@@ -7,6 +7,7 @@ import { Footer } from '@/components/layout/Footer';
 import { HomeHeroSection } from '@/components/home/HomeHeroSection';
 import { HomePanelLeaderboardSection } from '@/components/home/HomePanelLeaderboardSection';
 import { ReviewsSection } from '@/components/shared/ReviewsSection';
+import { AuthGate } from '@/components/auth/AuthGate';
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -40,28 +41,30 @@ export default function HomePage() {
   const userPoints = profileData?.user?.points ?? user?.points ?? 100;
 
   return (
-    <div className="min-h-screen bg-bg dark:bg-[#0a0818] text-text-primary flex flex-col transition-colors selection:bg-purple-500/30">
-      <Navbar />
+    <AuthGate>
+      <div className="min-h-screen bg-bg text-text-primary flex flex-col transition-colors selection:bg-accent-subtle selection:text-accent">
+        <Navbar />
 
-      <main className="flex-1 space-y-2">
-        {/* Top Hero Section with Soundwave Visualizer & Rank Card */}
-        <HomeHeroSection
-          userRank={userRank}
-          points={userPoints}
-          username={username}
-        />
+        <main className="flex-1 space-y-2">
+          {/* Top Hero Section with Soundwave Visualizer & Rank Card */}
+          <HomeHeroSection
+            userRank={userRank}
+            points={userPoints}
+            username={username}
+          />
 
-        {/* Meet Your Panel & Leaderboard Section */}
-        <HomePanelLeaderboardSection
-          userPoints={userPoints}
-          userName={username}
-        />
+          {/* Meet Your Panel & Leaderboard Section */}
+          <HomePanelLeaderboardSection
+            userPoints={userPoints}
+            userName={username}
+          />
 
-        {/* Student Reviews & Testimonials */}
-        <ReviewsSection />
-      </main>
+          {/* Student Reviews & Testimonials */}
+          <ReviewsSection />
+        </main>
 
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </AuthGate>
   );
 }

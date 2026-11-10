@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
-  <!-- Deepak: Principal Backend Engineer (Amber / Gold) -->
-  <circle cx="60" cy="60" r="58" fill="#0f172a" stroke="#f59e0b" stroke-width="4"/>
-  <circle cx="60" cy="46" r="22" fill="#d97706"/>
-  <rect x="46" y="40" width="28" height="10" rx="3" fill="#fef3c7"/>
-  <path d="M26 100 C26 78 40 70 60 70 C80 70 94 78 94 100 Z" fill="#b45309"/>
-  <circle cx="60" cy="80" r="5" fill="#fef3c7"/>
-</svg>
-

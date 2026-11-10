@@ -43,86 +43,47 @@ export function OnboardingFlow() {
       hasResume: Boolean(candidateFile),
     });
 
-    let parsedResumeText = user?.resumeText || '';
-    let parsedResumeUrl = user?.resumeUrl || '';
-
-    // Start background resume parsing & evaluation
-    if (candidateFile) {
-      try {
-        const formData = new FormData();
+    // Single atomic request: name + optional resume
+    try {
+      const formData = new FormData();
+      formData.append('username', candidateName.trim());
+      if (candidateFile) {
         formData.append('resume', candidateFile);
+      }
 
-        const res = await fetch('/api/user/resume', {
-          method: 'POST',
-          body: formData,
+      const res = await fetch('/api/user/onboard', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.atsScore) setAtsScore(data.atsScore);
+        if (data.topChanges?.length) setTopChanges(data.topChanges);
+        if (data.resumeText) setResumeText(data.resumeText);
+        if (data.resumeUrl) setResumeUrl(data.resumeUrl);
+
+        updateUser({
+          username: candidateName.trim(),
+          rank: 'Bronze',
+          points: 100,
+          isOnboarded: true,
+          onboardedAt: data.onboardedAt || new Date().toISOString(),
+          resumeText: data.resumeText || user?.resumeText,
+          resumeUrl: data.resumeUrl || user?.resumeUrl,
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.resumeText) parsedResumeText = data.resumeText;
-          if (data.resumeUrl) parsedResumeUrl = data.resumeUrl;
-          setResumeText(parsedResumeText);
-          setResumeUrl(parsedResumeUrl);
-
-          // Run ATS evaluation
-          if (parsedResumeText) {
-            try {
-              const evalRes = await fetch('/api/interviews/evaluate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  type: 'Resume Review',
-                  resumeText: parsedResumeText,
-                }),
-              });
-
-              if (evalRes.ok) {
-                const evalData = await evalRes.json();
-                if (evalData.evaluation) {
-                  setAtsScore(evalData.evaluation.score || 97);
-                  setTopChanges(evalData.evaluation.topChanges || []);
-                }
-              }
-            } catch (evalErr) {
-              console.warn('ATS evaluation fallback:', evalErr);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Resume processing error in background:', err);
+        identifyUser(user?.id || candidateName.trim(), {
+          username: candidateName.trim(),
+          rank: 'Bronze',
+          email: user?.email,
+        });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.warn('Onboarding error:', errData.error);
       }
-    }
-
-    // Save profile to database - only pass non-empty resume data, never overwrite with empty strings
-    try {
-      const onboardPayload: Record<string, any> = {
-        username: candidateName.trim(),
-      };
-      if (parsedResumeUrl) onboardPayload.resumeUrl = parsedResumeUrl;
-      if (parsedResumeText) onboardPayload.resumeText = parsedResumeText;
-
-      await fetch('/api/user/onboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(onboardPayload),
-      });
-
-      updateUser({
-        username: candidateName.trim(),
-        rank: 'Bronze',
-        points: 100,
-        isOnboarded: true,
-        resumeText: parsedResumeText || user?.resumeText,
-        resumeUrl: parsedResumeUrl || user?.resumeUrl,
-      });
-
-      identifyUser(user?.id || candidateName.trim(), {
-        username: candidateName.trim(),
-        rank: 'Bronze',
-        email: user?.email,
-      });
     } catch (saveErr) {
-      console.warn('Profile save note:', saveErr);
+      console.warn('Profile onboard error:', saveErr);
     }
   };
 
@@ -145,9 +106,9 @@ export function OnboardingFlow() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0e0a0a] text-amber-50 flex flex-col justify-center items-center px-4 py-8 relative overflow-hidden transition-colors selection:bg-amber-500/30">
-      {/* Background Ambient Warm Sepia Lighting */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-gradient-to-b from-amber-600/10 via-amber-900/5 to-transparent blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-bg text-text-primary flex flex-col justify-center items-center px-4 py-8 relative overflow-hidden transition-colors selection:bg-accent-subtle selection:text-accent">
+      {/* Background Ambient Lighting */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-accent-subtle blur-3xl pointer-events-none" />
 
       {/* Dynamic 4-Stage Flow */}
       {step === 'intro' && (

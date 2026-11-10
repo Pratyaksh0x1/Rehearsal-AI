@@ -1,14 +1,23 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { captureEvent } from '@/lib/analytics/posthog';
+import { calculateRankFromPoints, RANKS } from '@/config/ranks';
 
 interface HomePanelLeaderboardSectionProps {
   userPoints?: number;
   userName?: string;
+}
+
+interface LeaderboardUserItem {
+  rank: number;
+  name: string;
+  points: string;
+  badgeUrl: string;
+  isCurrentUser?: boolean;
 }
 
 export function HomePanelLeaderboardSection({
@@ -61,39 +70,40 @@ export function HomePanelLeaderboardSection({
     },
   ];
 
-  // Leaderboard Top 5 matching Image 1
-  const topFive = [
-    {
-      rank: 1,
-      name: 'Ananya S.',
-      points: '1,480',
-      badgeUrl: '/ranks/crown.svg',
-    },
-    {
-      rank: 2,
-      name: 'Rohan I.',
-      points: '1,215',
-      badgeUrl: '/ranks/crown.svg',
-    },
-    {
-      rank: 3,
-      name: 'Priya N.',
-      points: '940',
-      badgeUrl: '/ranks/swords.svg',
-    },
-    {
-      rank: 4,
-      name: 'Suraj Gupta',
-      points: '826',
-      badgeUrl: '/ranks/swords.svg',
-    },
-    {
-      rank: 5,
-      name: 'Siddharth M.',
-      points: '812',
-      badgeUrl: '/ranks/swords.svg',
-    },
-  ];
+  // Dynamic real leaderboard state
+  const [topFive, setTopFive] = useState<LeaderboardUserItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadRealLeaderboard() {
+      try {
+        const res = await fetch('/api/leaderboard?league=overall&limit=5');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.items) && data.items.length > 0) {
+            setTopFive(
+              data.items.map((item: any) => ({
+                rank: item.position,
+                name: item.username || 'Anonymous',
+                points: Number(item.points || 0).toLocaleString(),
+                badgeUrl: item.rankBadge || '/ranks/bronze.svg',
+                isCurrentUser:
+                  userName &&
+                  item.username &&
+                  userName.toLowerCase() === item.username.toLowerCase(),
+              }))
+            );
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load real leaderboard:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadRealLeaderboard();
+  }, [userName]);
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
@@ -101,7 +111,7 @@ export function HomePanelLeaderboardSection({
         {/* ================================================================= */}
         {/* LEFT CARD: Meet your panel                                        */}
         {/* ================================================================= */}
-        <div className="bg-surface border border-border dark:bg-[#131124]/90 dark:border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-xl dark:shadow-2xl relative overflow-hidden backdrop-blur-2xl transition-all">
+        <div className="bg-surface border border-border rounded-2xl p-6 sm:p-8 flex flex-col justify-between shadow-sm relative overflow-hidden transition-all">
           <div>
             {/* Header */}
             <div className="space-y-2 mb-6">
@@ -119,10 +129,10 @@ export function HomePanelLeaderboardSection({
               {panelists.map((panelist, idx) => (
                 <div
                   key={idx}
-                  className="rounded-2xl bg-bg-subtle border border-border hover:border-purple-400 dark:bg-[#1d1b32]/85 dark:border-white/5 dark:hover:border-purple-500/30 p-3.5 sm:p-4 transition-all duration-200 flex items-center gap-3.5 sm:gap-4 group hover:bg-surface-hover dark:hover:bg-[#23203c]"
+                  className="rounded-xl bg-bg-subtle border border-border hover:border-border-strong p-3.5 sm:p-4 transition-all duration-200 flex items-center gap-3.5 sm:gap-4 group hover:bg-surface-hover"
                 >
                   {/* Circular Avatar */}
-                  <div className="relative w-12 h-12 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-purple-500/30 shadow-md">
+                  <div className="relative w-12 h-12 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-accent/30 shadow-sm">
                     <Image
                       src={panelist.avatarUrl}
                       alt={panelist.name}
@@ -172,7 +182,7 @@ export function HomePanelLeaderboardSection({
         {/* ================================================================= */}
         {/* RIGHT CARD: Leaderboard                                           */}
         {/* ================================================================= */}
-        <div className="bg-surface border border-border dark:bg-[#131124]/90 dark:border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-xl dark:shadow-2xl relative overflow-hidden backdrop-blur-2xl transition-all">
+        <div className="bg-surface border border-border rounded-2xl p-6 sm:p-8 flex flex-col justify-between shadow-sm relative overflow-hidden transition-all">
           <div>
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
@@ -186,69 +196,96 @@ export function HomePanelLeaderboardSection({
 
             {/* Top 5 rows */}
             <div className="space-y-3.5">
-              {topFive.map((user) => (
-                <div
-                  key={user.rank}
-                  className="flex items-center justify-between py-1.5 px-2 hover:bg-slate-100 dark:hover:bg-white/[0.02] rounded-xl transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    {/* Position Number (italic serif) */}
-                    <span className="font-serif italic text-text-muted text-base w-4 text-center">
-                      {user.rank}
-                    </span>
+              {isLoading && topFive.length === 0 ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-2 text-text-subtle font-mono text-xs">
+                  <Loader2 className="w-5 h-5 animate-spin text-accent" />
+                  <span>Loading real rankings...</span>
+                </div>
+              ) : topFive.length === 0 ? (
+                <div className="py-8 text-center text-text-subtle font-mono text-xs">
+                  No candidates ranked yet.
+                </div>
+              ) : (
+                topFive.map((user) => (
+                  <div
+                    key={user.rank}
+                    className={`flex items-center justify-between py-1.5 px-2 rounded-xl transition-colors ${
+                      user.isCurrentUser
+                        ? 'bg-accent-subtle/50 border border-accent/30'
+                        : 'hover:bg-slate-100 dark:hover:bg-white/[0.02]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      {/* Position Number (italic serif) */}
+                      <span className="font-serif italic text-text-muted text-base w-4 text-center">
+                        {user.rank}
+                      </span>
 
-                    {/* Rank Emblem Badge */}
-                    <div className="relative w-8 h-8 flex-shrink-0 drop-shadow">
-                      <Image
-                        src={user.badgeUrl}
-                        alt="Rank Badge"
-                        fill
-                        className="object-contain"
-                      />
+                      {/* Rank Emblem Badge */}
+                      <div className="relative w-8 h-8 flex-shrink-0 drop-shadow">
+                        <Image
+                          src={user.badgeUrl}
+                          alt="Rank Badge"
+                          fill
+                          className="object-contain"
+                        />
+                      </div>
+
+                      {/* Candidate Name */}
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm sm:text-base text-text-primary dark:text-white/95">
+                          {user.name}
+                        </span>
+                        {user.isCurrentUser && (
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-accent text-accent-foreground">
+                            YOU
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Candidate Name */}
-                    <span className="font-medium text-sm sm:text-base text-text-primary dark:text-white/95">
-                      {user.name}
+                    {/* Rating / Score */}
+                    <span className="font-bold text-base sm:text-lg text-text-primary dark:text-white font-mono">
+                      {user.points}
                     </span>
                   </div>
-
-                  {/* Rating / Score */}
-                  <span className="font-bold text-base sm:text-lg text-text-primary dark:text-white font-mono">
-                    {user.points}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
 
             {/* YOU ARE HERE Card */}
-            <div className="rounded-2xl bg-gradient-to-r from-purple-100 via-fuchsia-50 to-indigo-100 border border-purple-300/80 dark:from-[#20183e] dark:to-[#2b1b4b] dark:border-purple-500/40 p-3.5 sm:p-4 flex items-center justify-between shadow-md dark:shadow-[0_0_25px_rgba(168,85,247,0.18)] mt-6">
+            <div className="rounded-xl bg-accent-subtle border border-accent/20 p-3.5 sm:p-4 flex items-center justify-between shadow-sm mt-6">
               <div className="flex items-center gap-3">
                 {/* 2-line YOU ARE HERE tag */}
-                <div className="flex flex-col text-[9px] font-mono font-black uppercase tracking-wider text-purple-700 dark:text-purple-300 leading-tight">
+                <div className="flex flex-col text-[10px] font-mono font-bold uppercase tracking-wider text-accent leading-tight">
                   <span>YOU ARE</span>
                   <span>HERE</span>
                 </div>
 
-                {/* Current User Soldier / Bronze Emblem */}
+                {/* Current User Real Rank Emblem */}
                 <div className="relative w-9 h-9 flex-shrink-0 drop-shadow">
                   <Image
-                    src="/ranks/bronze.svg"
-                    alt="Your Rank"
+                    src={RANKS[calculateRankFromPoints(userPoints)].badgeUrl}
+                    alt={`${RANKS[calculateRankFromPoints(userPoints)].displayName} Rank`}
                     fill
                     className="object-contain"
                   />
                 </div>
 
                 {/* User Name */}
-                <span className="font-bold text-base sm:text-lg text-text-primary dark:text-white">
-                  {userName === 'Candidate' ? 'You' : userName}
-                </span>
+                <div className="flex flex-col">
+                  <span className="font-bold text-base sm:text-lg text-text-primary">
+                    {userName === 'Candidate' ? 'You' : userName}
+                  </span>
+                  <span className="text-[11px] font-mono text-text-subtle uppercase">
+                    {RANKS[calculateRankFromPoints(userPoints)].displayName} Tier
+                  </span>
+                </div>
               </div>
 
               {/* Current Points */}
-              <span className="font-bold text-lg sm:text-xl text-text-primary dark:text-white font-mono">
-                {userPoints}
+              <span className="font-bold text-lg sm:text-xl text-text-primary font-mono">
+                {userPoints} pts
               </span>
             </div>
           </div>

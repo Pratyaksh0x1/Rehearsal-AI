@@ -60,6 +60,8 @@ interface VoicePanelProps {
   initialMessage?: string;
   /** Automatically trigger start on mount after explicit user gesture in pre-interview step */
   autoStart?: boolean;
+  /** Broadcast real-time voice state and volume level to parent chambers */
+  onStateChange?: (state: VoiceStateLabel, volumeLevel: number) => void;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -251,6 +253,7 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
 
   const [started, setStarted] = useState(false);
   const [isMicActive, setIsMicActive] = useState(false);
+  const [isMicDenied, setIsMicDenied] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
@@ -316,20 +319,33 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
 
   const stopPlayback = useCallback(() => {
     speakTokenRef.current++;
+    if (activeAbortControllerRef.current) {
+      try {
+        activeAbortControllerRef.current.abort();
+      } catch {}
+      activeAbortControllerRef.current = null;
+    }
     const a = audioRef.current;
     if (a) {
       a.onended = null;
       a.onerror = null;
-      a.pause();
+      try {
+        a.pause();
+        a.currentTime = 0;
+        a.src = '';
+      } catch {}
       audioRef.current = null;
     }
     const release = playResolverRef.current;
     playResolverRef.current = null;
     release?.();
+    ttsQueueChainRef.current = Promise.resolve(null);
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
+    busyRef.current = false;
     isAgentSpeakingRef.current = false;
+    isAwaitingFirstTokenRef.current = false;
     setIsAgentSpeaking(false);
   }, []);
 
@@ -576,11 +592,11 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
         }
         setErr(`Interviewer error: ${e?.message || e}`);
       } finally {
+        busyRef.current = false;
+        isAwaitingFirstTokenRef.current = false;
         if (token === speakTokenRef.current) {
           isAgentSpeakingRef.current = false;
           setIsAgentSpeaking(false);
-          busyRef.current = false;
-          isAwaitingFirstTokenRef.current = false;
           ignoreUntilRef.current = Date.now() + 600;
           setStatusMessage('Listening - speak any time');
         }
@@ -699,8 +715,8 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
               if (res.isFinal) {
                 const phrase = res[0].transcript.trim();
                 if (phrase) {
+                  // Browser recognition is fallback-only; do not push into partsRef
                   browserTranscriptRef.current += ' ' + phrase;
-                  partsRef.current.push(phrase);
                 }
               }
             }
@@ -881,12 +897,11 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
       setIsMicActive(true);
       setStatusMessage('Listening - speak any time');
     } catch (err: any) {
-      console.warn('Microphone unavailable:', err);
+      console.error('[VoicePanel] Microphone unavailable:', err);
       setIsMicActive(false);
-      setErr(
-        'Microphone blocked or unavailable - allow mic access in the browser, or type your answers below.'
-      );
-      setStatusMessage('Mic off - you can type your answers');
+      setIsMicDenied(true);
+      setErr('Microphone access was denied. You can type your answers below.');
+      setStatusMessage('Mic off — type mode enabled');
     }
   }, [endSegment, stopPlayback]);
 
@@ -924,11 +939,14 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
     ref,
     () => ({
       speak,
-      stopSpeaking: stopPlayback,
+      stopSpeaking: () => {
+        stopPlayback();
+        stopMic();
+      },
       isBusy: () => isAgentSpeakingRef.current || busyRef.current || segRef.current.active,
       start: handleStart,
     }),
-    [speak, stopPlayback]
+    [speak, stopPlayback, stopMic, handleStart]
   );
 
   const handleTextSubmit = async (e: React.FormEvent) => {
@@ -953,12 +971,16 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
           ? 'Heard you'
           : 'Listening';
 
+  useEffect(() => {
+    propsRef.current.onStateChange?.(voiceState, volumeLevel);
+  }, [voiceState, volumeLevel]);
+
   /* --------------------------------- UI ----------------------------------- */
 
   return (
-    <div className="w-full bg-surface border border-border dark:bg-[#0d1424]/90 dark:border-white/10 rounded-2xl p-4 shadow-xl backdrop-blur-xl flex flex-col gap-3 transition-all">
-      <div className="flex items-center justify-between border-b border-border dark:border-white/10 pb-3">
-        <div className="flex items-center gap-2.5">
+    <div className="w-full min-w-0 max-w-full overflow-hidden bg-surface border border-border rounded-xl p-3 sm:p-4 shadow-sm flex flex-col gap-3 transition-all">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-3 border-b border-border dark:border-white/10 pb-3">
+        <div className="flex min-w-[160px] flex-1 items-center gap-2.5">
           <div
             className={`w-3 h-3 rounded-full transition-all ${
               voiceState === 'Speaking'
@@ -975,11 +997,8 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-text-primary">{panelistName}</span>
-              <span className="text-[10px] font-mono text-accent bg-accent/15 px-2 py-0.5 rounded-full border border-accent/25">
-                Gnani.ai &bull; {model || 'Timbre'}
-              </span>
 
-              {/* Requirement 2: Prominent State Label */}
+              {/* Prominent Real Voice State Label */}
               <span
                 className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border transition-all ${
                   voiceState === 'Listening'
@@ -996,16 +1015,16 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
                 {voiceState}
               </span>
             </div>
-            <p className="text-[11px] text-text-muted font-mono mt-0.5">{statusMessage}</p>
+            <p className="break-words text-[11px] leading-4 text-text-muted font-mono mt-0.5">{statusMessage}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           {/* Headphones Interrupt Mode Toggle */}
           <button
             type="button"
             onClick={() => setHeadphonesMode(!headphonesMode)}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-mono flex items-center gap-1.5 border transition-all ${
+            className={`whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-mono flex items-center gap-1.5 border transition-all ${
               headphonesMode
                 ? 'bg-purple-500/20 border-purple-500/40 text-purple-700 dark:text-purple-300 shadow-sm'
                 : 'bg-bg-subtle border-border text-text-muted hover:text-text-primary dark:bg-white/5 dark:border-white/10 dark:text-text-subtle dark:hover:text-text-primary'
@@ -1020,7 +1039,7 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
             type="button"
             disabled={!active}
             onClick={() => (isMicActive ? stopMic() : void startMic())}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-mono flex items-center gap-1.5 border transition-all disabled:opacity-40 ${
+            className={`whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-mono flex items-center gap-1.5 border transition-all disabled:opacity-40 ${
               isMicActive
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
                 : 'bg-bg-subtle border-border text-text-muted hover:text-text-primary dark:bg-white/5 dark:border-white/10 dark:text-text-subtle dark:hover:text-text-primary'
@@ -1079,9 +1098,9 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
           <span>Start voice interview</span>
         </button>
       ) : (
-        <div className="p-3 rounded-xl bg-bg-subtle border border-border dark:bg-black/40 dark:border-white/5 flex flex-col justify-center gap-2">
-          <div className="flex items-center justify-between text-[11px] font-mono text-text-muted">
-            <span className="flex items-center gap-1.5">
+        <div className="min-w-0 rounded-xl bg-bg-subtle border border-border p-3 dark:bg-black/40 dark:border-white/5 flex flex-col justify-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[11px] font-mono text-text-muted">
+            <span className="min-w-0 flex items-center gap-1.5">
               {voiceState === 'Heard you' ? (
                 <span className="text-emerald-500 dark:text-emerald-400 font-bold flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-ping inline-block" />
@@ -1106,7 +1125,7 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
             </span>
 
             {/* Requirement 2: Live mic-level meter pill */}
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex shrink-0 items-center gap-2">
               {isMicActive && (
                 <div
                   className="flex items-center gap-1 px-2 py-0.5 rounded bg-surface border border-border dark:bg-white/5 dark:border-white/10"
@@ -1126,7 +1145,7 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
                 <button
                   type="button"
                   onClick={stopPlayback}
-                  className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border border-border hover:bg-surface-hover dark:border-white/15 dark:hover:bg-white/10"
+                  className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] px-2 py-0.5 rounded-full border border-border hover:bg-surface-hover dark:border-white/15 dark:hover:bg-white/10"
                   title="Skip the rest of what the interviewer is saying"
                 >
                   <SkipForward className="w-3 h-3" /> Skip
@@ -1161,13 +1180,14 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <form onSubmit={handleTextSubmit} className="flex-1 flex items-center gap-2">
+      {/* Show typed fallback only if microphone access was denied */}
+      {isMicDenied && (
+        <form onSubmit={handleTextSubmit} className="flex items-center gap-2 pt-2 border-t border-border/40">
           <input
             type="text"
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Or type your thoughts/explanation here..."
+            placeholder="Type your response here..."
             disabled={isProcessing}
             className="flex-1 px-3.5 py-2 text-xs rounded-full border border-white/10 bg-white/5 focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 text-text-primary placeholder:text-text-subtle"
           />
@@ -1181,18 +1201,20 @@ export const VoicePanel = forwardRef<VoicePanelHandle, VoicePanelProps>(function
             <span>Send</span>
           </button>
         </form>
+      )}
 
-        {isUserSpeaking && (
+      {isUserSpeaking && (
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={endSegment}
-            className="px-3.5 py-2 rounded-full bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs shadow-lg animate-pulse flex items-center gap-1.5 transition-all"
+            className="px-3.5 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs shadow-lg animate-pulse flex items-center gap-1.5 transition-all"
             title="Done speaking now (optional override)"
           >
             <span>Done speaking &rarr;</span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 });

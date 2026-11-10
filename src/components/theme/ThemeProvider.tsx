@@ -39,11 +39,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     let initialTheme: Theme = 'dark';
     try {
       const stored = localStorage.getItem('rehearsal-theme') as Theme | null;
-      if (stored === 'dark' || stored === 'light') {
-        initialTheme = stored;
+      if (stored === 'light') {
+        initialTheme = 'light';
       } else {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        initialTheme = prefersDark ? 'dark' : 'light';
+        initialTheme = 'dark';
       }
     } catch {
       initialTheme = 'dark';

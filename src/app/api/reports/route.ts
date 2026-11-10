@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/supabase/server';
 import { db, isDatabaseConfigured } from '@/db';
 import { reports } from '@/db/schema';
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
+    const { user: authUser, error: authError } = await requireUser();
+    if (authError || !authUser) {
+      return NextResponse.json(
+        { error: 'Unauthorized: login required' },
+        { status: 401 }
+      );
+    }
 
-    const userId = authUser?.id || null;
+    const userId = authUser.id;
 
     const body = await req.json();
     const { category, description } = body;

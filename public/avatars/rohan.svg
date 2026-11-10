@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
-  <!-- Rohan: Full-Stack Architect (Indigo / Royal) -->
-  <circle cx="60" cy="60" r="58" fill="#0f172a" stroke="#6366f1" stroke-width="4"/>
-  <circle cx="60" cy="46" r="22" fill="#4f46e5"/>
-  <rect x="46" y="40" width="28" height="9" rx="3" fill="#e0e7ff"/>
-  <path d="M26 100 C26 78 40 70 60 70 C80 70 94 78 94 100 Z" fill="#4338ca"/>
-  <rect x="54" y="76" width="12" height="12" rx="2" fill="#c7d2fe"/>
-</svg>
-

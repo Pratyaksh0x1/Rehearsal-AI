@@ -149,7 +149,8 @@ export function resolveVoice(voice?: string, model?: string) {
 export async function synthesizeSpeech(
   text: string,
   voice?: string,
-  model?: string
+  model?: string,
+  language?: string
 ): Promise<{ audioBuffer: Buffer; contentType: string; voiceUsed: string; modelUsed: string }> {
   const cfg = getGnaniConfig();
   if (!cfg.apiKey) throw new GnaniError('GNANI_API_KEY is not set in .env.local', 500, 'NO_API_KEY');
@@ -159,7 +160,7 @@ export async function synthesizeSpeech(
     text: text.trim(),
     voice: picked.voice,
     model: picked.model,
-    language: cfg.language,
+    language: language || cfg.language,
     speed: 1.0,
     audio_config: { encoding: 'linear_pcm', container: 'wav', num_channels: 1, sample_rate: 24000, sample_width: 2 },
   });
@@ -201,7 +202,11 @@ const TECH_BIAS = [
   'substring', 'bitmask', 'dijkstra', 'toposort', 'logarithmic', 'quicksort', 'mergesort', 'leetcode',
 ];
 
-export async function transcribeAudio(audioBuffer: Buffer, mimeType = 'audio/wav'): Promise<string> {
+export async function transcribeAudio(
+  audioBuffer: Buffer,
+  mimeType = 'audio/wav',
+  languageCode?: string
+): Promise<string> {
   const cfg = getGnaniConfig();
   if (!cfg.apiKey) throw new GnaniError('GNANI_API_KEY is not set in .env.local', 500, 'NO_API_KEY');
 
@@ -212,7 +217,7 @@ export async function transcribeAudio(audioBuffer: Buffer, mimeType = 'audio/wav
   return serialize(async () => {
     const form = new FormData();
     form.append('audio_file', new Blob([new Uint8Array(audioBuffer)], { type: effectiveMime }), `audio.${ext}`);
-    form.append('language_code', cfg.language);
+    form.append('language_code', languageCode || cfg.language);
     form.append('format', 'verbatim');
     form.append('bias_list', JSON.stringify(TECH_BIAS));
     form.append('bias_score', '1.0');

@@ -1,44 +1,78 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
-import { Mic, ArrowRight, Volume2, Sparkles, Shield, User } from 'lucide-react';
+import { Mic, ArrowRight, Volume2, Sparkles, Shield, User, HelpCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { AIPanelist } from '@/config/panels';
+import { checkProfanity } from '@/lib/moderation/profanity';
+import { ConductWarningBanner } from './ConductWarningBanner';
+import { sendGreetingChatMessage } from '@/lib/interview/chatClient';
 
 interface InterviewGreetingRoomProps {
   candidateName: string;
+  candidateRank?: string;
   interviewer: AIPanelist;
   problemTitle?: string;
+  durationMinutes?: number;
   onProceedToCoding: () => void;
   speakFn?: (text: string) => Promise<void>;
   stopSpeakingFn?: () => void;
 }
 
+type GreetingPhase =
+  | 'interviewer_greeting'
+  | 'candidate_answering'
+  | 'interviewer_speaking'
+  | 'interviewer_transition'
+  | 'ready_to_code';
+
 export function InterviewGreetingRoom({
   candidateName,
+  candidateRank = 'Bronze',
   interviewer,
   problemTitle,
+  durationMinutes = 20,
   onProceedToCoding,
   speakFn,
   stopSpeakingFn,
 }: InterviewGreetingRoomProps) {
-  const [greetingPhase, setGreetingPhase] = useState<
-    'interviewer_greeting' | 'candidate_answering' | 'interviewer_transition' | 'ready_to_code'
-  >('interviewer_greeting');
+  const [greetingPhase, setGreetingPhase] = useState<GreetingPhase>('interviewer_greeting');
   const [candidateReply, setCandidateReply] = useState<string>('');
+  const [interviewerSpeechText, setInterviewerSpeechText] = useState<string>('');
   const [interviewerSpeaking, setInterviewerSpeaking] = useState(false);
   const [candidateSpeaking, setCandidateSpeaking] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState(false);
   const [waveformBars, setWaveformBars] = useState<number[]>([14, 26, 38, 20, 32, 44, 28, 16, 22]);
+  const [conductWarning, setConductWarning] = useState<{ isOpen: boolean; matchedWord?: string }>({
+    isOpen: false,
+  });
 
+  // Critical State & Synchronization Refs
   const userVideoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const candidateReplyRef = useRef('');
-  candidateReplyRef.current = candidateReply;
+  const recognitionRef = useRef<any>(null);
+  const mountedRef = useRef(true);
 
-  // Initialize candidate camera reliably
+  // Conversation Memory Ref: complete history of turns for this meeting room
+  const messagesRef = useRef<Array<{ role: 'assistant' | 'user'; content: string }>>([]);
+
+  // Concurrency & Lock Refs
+  const processingRef = useRef(false);
+  const interviewerSpeakingRef = useRef(false);
+  const isCandidateTurnRef = useRef(false);
+
+  // Latest props & callbacks stored in refs to avoid stale closures
+  const speakFnRef = useRef(speakFn);
+  speakFnRef.current = speakFn;
+  const stopSpeakingFnRef = useRef(stopSpeakingFn);
+  stopSpeakingFnRef.current = stopSpeakingFn;
+  const onProceedToCodingRef = useRef(onProceedToCoding);
+  onProceedToCodingRef.current = onProceedToCoding;
+
+  // Initialize candidate camera feed once
   useEffect(() => {
     let mounted = true;
     async function initCamera() {
@@ -72,7 +106,7 @@ export function InterviewGreetingRoom({
     };
   }, []);
 
-  // Ensure video element plays as soon as ref or permission changes
+  // Ensure video element plays as soon as stream or ref mounts
   useEffect(() => {
     if (userVideoRef.current && streamRef.current) {
       if (userVideoRef.current.srcObject !== streamRef.current) {
@@ -82,7 +116,7 @@ export function InterviewGreetingRoom({
     }
   }, [hasCameraPermission]);
 
-  // Audio level analyser on microphone for live speech detection
+  // Audio volume analyzer: monitors candidate mic level, strictly ignores while interviewer is speaking
   useEffect(() => {
     let mounted = true;
     let animId: number;
@@ -111,6 +145,14 @@ export function InterviewGreetingRoom({
 
         const checkVolume = () => {
           if (!mounted) return;
+
+          // Ignore microphone meter completely while interviewer is speaking
+          if (interviewerSpeakingRef.current) {
+            setCandidateSpeaking(false);
+            animId = requestAnimationFrame(checkVolume);
+            return;
+          }
+
           analyser.getByteFrequencyData(dataArray);
           let sum = 0;
           for (let i = 0; i < dataArray.length; i++) {
@@ -118,7 +160,7 @@ export function InterviewGreetingRoom({
           }
           const avg = sum / dataArray.length;
 
-          // If sound level is above ambient noise, candidate is speaking
+          // Detect active candidate speech
           if (avg > 18) {
             setCandidateSpeaking(true);
           } else {
@@ -147,24 +189,34 @@ export function InterviewGreetingRoom({
     };
   }, []);
 
-  // Browser Speech Recognition for candidate answering
-  useEffect(() => {
-    if (greetingPhase !== 'candidate_answering') return;
-
-    const SpeechRec =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  // Safe helper to restart browser speech recognition without carrying past transcript buffers
+  const restartRecognition = useCallback(() => {
+    if (!mountedRef.current || !isCandidateTurnRef.current || processingRef.current || interviewerSpeakingRef.current) {
+      return;
+    }
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRec) return;
 
-    let recognition: any = null;
-    let silenceTimer: NodeJS.Timeout;
-
     try {
-      recognition = new SpeechRec();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {}
+      }
+
+      const recognition = new SpeechRec();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
+      let silenceTimer: NodeJS.Timeout | null = null;
+
       recognition.onresult = (event: any) => {
+        // Drop any incoming speech results if locked or if interviewer is speaking
+        if (processingRef.current || interviewerSpeakingRef.current || !isCandidateTurnRef.current) {
+          return;
+        }
+
         let transcript = '';
         for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript + ' ';
@@ -172,34 +224,172 @@ export function InterviewGreetingRoom({
         const trimmed = transcript.trim();
         if (trimmed.length > 0) {
           setCandidateReply(trimmed);
-          clearTimeout(silenceTimer);
-          // When candidate pauses after speaking, auto-submit reply
+          if (silenceTimer) clearTimeout(silenceTimer);
+
+          // Auto-submit candidate response after natural speech pause
           silenceTimer = setTimeout(() => {
-            if (trimmed.length > 2) {
-              void handleCandidateResponse(trimmed);
+            if (trimmed.length > 1 && !processingRef.current && isCandidateTurnRef.current) {
+              void handleCandidateUtteranceRef.current(trimmed);
             }
           }, 1400);
         }
       };
 
       recognition.onerror = (e: any) => {
-        console.warn('SpeechRecognition notice:', e);
+        if (e?.error !== 'no-speech' && e?.error !== 'aborted') {
+          console.warn('SpeechRecognition notice:', e?.error || e);
+        }
+      };
+
+      recognition.onend = () => {
+        if (
+          mountedRef.current &&
+          isCandidateTurnRef.current &&
+          !processingRef.current &&
+          !interviewerSpeakingRef.current
+        ) {
+          try {
+            recognition.start();
+          } catch {}
+        }
       };
 
       recognition.start();
-    } catch (e) {
-      console.warn('Speech recognition start failed:', e);
+      recognitionRef.current = recognition;
+    } catch (err) {
+      console.warn('Could not start speech recognition:', err);
+    }
+  }, []);
+
+  // Main Candidate Utterance Handler: processes speech or quick chips with LLM intent detection
+  const handleCandidateUtterance = async (userText: string) => {
+    const trimmed = (userText || '').trim();
+    if (!trimmed || processingRef.current) return;
+
+    // Acquire lock synchronously to prevent double submissions or echo
+    processingRef.current = true;
+    isCandidateTurnRef.current = false;
+
+    // Stop recognition immediately so event.results doesn't buffer past text
+    try {
+      recognitionRef.current?.abort();
+    } catch {}
+
+    // Profanity & conduct check
+    const profCheck = checkProfanity(trimmed);
+    if (profCheck.hasProfanity) {
+      setConductWarning({ isOpen: true, matchedWord: profCheck.matchedWord });
+      setCandidateSpeaking(false);
+      setInterviewerSpeaking(true);
+      interviewerSpeakingRef.current = true;
+
+      const reminder = 'Please keep our discussion respectful and professional.';
+      setInterviewerSpeechText(reminder);
+
+      if (speakFnRef.current) {
+        await speakFnRef.current(reminder);
+      } else {
+        await new Promise((r) => setTimeout(r, 2200));
+      }
+
+      setInterviewerSpeaking(false);
+      interviewerSpeakingRef.current = false;
+      setCandidateReply('');
+      processingRef.current = false;
+      isCandidateTurnRef.current = true;
+      restartRecognition();
+      return;
     }
 
-    return () => {
-      clearTimeout(silenceTimer);
-      try {
-        recognition?.stop();
-      } catch {}
-    };
-  }, [greetingPhase]);
+    setCandidateReply(trimmed);
+    setCandidateSpeaking(true);
+    await new Promise((r) => setTimeout(r, 450));
+    setCandidateSpeaking(false);
 
-  // Animate audio waveform bars when speaking
+    // Record candidate turn in conversation memory
+    messagesRef.current.push({ role: 'user', content: trimmed });
+
+    setGreetingPhase('interviewer_speaking');
+    setInterviewerSpeaking(true);
+    interviewerSpeakingRef.current = true;
+
+    try {
+      // Call LLM for natural answer & intent detection
+      const result = await sendGreetingChatMessage({
+        body: {
+          type: 'Technical',
+          phase: 'greeting',
+          messages: messagesRef.current,
+          candidateName,
+          roundDuration: durationMinutes,
+          problemTitle: problemTitle || 'Algorithmic Problem',
+          interviewerName: interviewer.name,
+          interviewerRole: interviewer.role,
+          interviewerPersonality: interviewer.personality,
+        },
+        fallbackReply: 'Do you have any questions before we jump into the problem?',
+      });
+
+      const reply = result.reply;
+      const intent = result.intent;
+
+      // Record assistant reply in conversation memory
+      messagesRef.current.push({ role: 'assistant', content: reply });
+      setInterviewerSpeechText(reply);
+
+      // Handle based on LLM-detected intent
+      if (intent === 'ready_to_start') {
+        setGreetingPhase('interviewer_transition');
+
+        if (speakFnRef.current) {
+          await speakFnRef.current(reply);
+        } else {
+          await new Promise((r) => setTimeout(r, 2400));
+        }
+
+        setInterviewerSpeaking(false);
+        interviewerSpeakingRef.current = false;
+        setGreetingPhase('ready_to_code');
+
+        // Transition into coding workspace only after speech finishes
+        setTimeout(() => {
+          onProceedToCodingRef.current();
+        }, 900);
+        return;
+      }
+
+      // Candidate had a question or responded to greeting: speak answer and keep listening
+      if (speakFnRef.current) {
+        await speakFnRef.current(reply);
+      } else {
+        await new Promise((r) => setTimeout(r, 3200));
+      }
+
+      setInterviewerSpeaking(false);
+      interviewerSpeakingRef.current = false;
+      setCandidateReply('');
+      setGreetingPhase('candidate_answering');
+      isCandidateTurnRef.current = true;
+      processingRef.current = false;
+      restartRecognition();
+    } catch (err: any) {
+      console.error('Greeting room communication error:', err);
+      toast.error('Network issue connecting to interviewer. Please try again.');
+
+      setInterviewerSpeaking(false);
+      interviewerSpeakingRef.current = false;
+      processingRef.current = false;
+      isCandidateTurnRef.current = true;
+      setGreetingPhase('candidate_answering');
+      restartRecognition();
+    }
+  };
+
+  // Ref to always expose latest handleCandidateUtterance to recognition callbacks
+  const handleCandidateUtteranceRef = useRef(handleCandidateUtterance);
+  handleCandidateUtteranceRef.current = handleCandidateUtterance;
+
+  // Waveform animation loop
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (interviewerSpeaking || candidateSpeaking) {
@@ -214,67 +404,71 @@ export function InterviewGreetingRoom({
     return () => clearInterval(interval);
   }, [interviewerSpeaking, candidateSpeaking]);
 
-  // Conversational Greeting Script
+  // Initial Greeting Effect: runs once on mount with stable interviewer & candidate IDs
   useEffect(() => {
+    mountedRef.current = true;
     let isCancelled = false;
 
-    async function runGreetingScript() {
+    async function runInitialGreeting() {
       setInterviewerSpeaking(true);
+      interviewerSpeakingRef.current = true;
+      processingRef.current = true;
+      isCandidateTurnRef.current = false;
+
       const greetingMessage = `Hi ${candidateName}! I'm ${interviewer.name}, and I will be taking your technical interview today. How are you doing today?`;
 
-      if (speakFn) {
-        await speakFn(greetingMessage);
+      // Initialize conversation memory with the opening greeting
+      messagesRef.current = [{ role: 'assistant', content: greetingMessage }];
+      setInterviewerSpeechText(greetingMessage);
+
+      if (speakFnRef.current) {
+        await speakFnRef.current(greetingMessage);
       } else {
         await new Promise((r) => setTimeout(r, 3200));
       }
 
-      if (isCancelled) return;
+      if (isCancelled) {
+        setInterviewerSpeaking(false);
+        interviewerSpeakingRef.current = false;
+        processingRef.current = false;
+        return;
+      }
+
       setInterviewerSpeaking(false);
+      interviewerSpeakingRef.current = false;
+      processingRef.current = false;
+      isCandidateTurnRef.current = true;
       setGreetingPhase('candidate_answering');
+      restartRecognition();
     }
 
     const timer = setTimeout(() => {
-      void runGreetingScript();
-    }, 600);
+      void runInitialGreeting();
+    }, 500);
 
     return () => {
+      mountedRef.current = false;
       isCancelled = true;
       clearTimeout(timer);
-      stopSpeakingFn?.();
+      setInterviewerSpeaking(false);
+      interviewerSpeakingRef.current = false;
+      processingRef.current = false;
+      try {
+        recognitionRef.current?.abort();
+      } catch {}
+      stopSpeakingFnRef.current?.();
     };
-  }, [candidateName, interviewer.name, speakFn, stopSpeakingFn]);
-
-  // When candidate answers (via voice or quick reply chip)
-  const handleCandidateResponse = async (replyText: string) => {
-    if (greetingPhase !== 'candidate_answering') return;
-    setCandidateReply(replyText);
-    setCandidateSpeaking(true);
-
-    // Short confirmation delay
-    await new Promise((r) => setTimeout(r, 900));
-    setCandidateSpeaking(false);
-    setGreetingPhase('interviewer_transition');
-    setInterviewerSpeaking(true);
-
-    const transitionMessage = `Wonderful! Let's start with your coding round. Take a look at your problem specification, and let's discuss your approach.`;
-
-    if (speakFn) {
-      await speakFn(transitionMessage);
-    } else {
-      await new Promise((r) => setTimeout(r, 2600));
-    }
-
-    setInterviewerSpeaking(false);
-    setGreetingPhase('ready_to_code');
-
-    // Automatically shift to coding environment after a brief pause
-    setTimeout(() => {
-      onProceedToCoding();
-    }, 1200);
-  };
+  }, [candidateName, interviewer.name, restartRecognition]);
 
   return (
-    <div className="w-full max-w-6xl mx-auto py-6 sm:py-10 px-4 animate-in fade-in-50 duration-300">
+    <div className="w-full max-w-6xl mx-auto py-6 sm:py-10 px-4 animate-in fade-in-50 duration-300 font-sans relative">
+      {/* Real-time Conduct / Profanity Warning Banner */}
+      <ConductWarningBanner
+        isOpen={conductWarning.isOpen}
+        matchedWord={conductWarning.matchedWord}
+        onDismiss={() => setConductWarning({ isOpen: false })}
+      />
+
       {/* Top Header Row with status */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">
@@ -287,19 +481,19 @@ export function InterviewGreetingRoom({
         <button
           type="button"
           onClick={onProceedToCoding}
-          className="text-xs font-semibold text-text-muted hover:text-[#f59e0b] dark:text-zinc-400 dark:hover:text-[#f59e0b] transition-colors flex items-center gap-1 cursor-pointer"
+          className="text-xs font-semibold text-text-muted hover:text-accent transition-colors flex items-center gap-1 cursor-pointer focus-ring"
         >
           <span>Jump to coding</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* 2 Big Video Boxes Side-by-Side matching media_1794199028518_3bafee3a.jpg */}
+      {/* 2 Big Video Boxes Side-by-Side */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch mb-8">
         {/* LEFT BOX: AI Interviewer Video Box */}
-        <div className="rounded-3xl border border-border dark:border-white/10 bg-[#161224] p-2 sm:p-3 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/3] sm:aspect-[16/11]">
+        <div className="rounded-2xl border border-border bg-surface p-2 sm:p-3 shadow-sm relative overflow-hidden flex flex-col justify-between aspect-[4/3] sm:aspect-[16/11]">
           {/* Interviewer Studio Headshot / Video stream */}
-          <div className="relative w-full h-full rounded-2xl overflow-hidden bg-[#1c1626]">
+          <div className="relative w-full h-full rounded-xl overflow-hidden bg-bg">
             <Image
               src={interviewer.avatarUrl}
               alt={interviewer.name}
@@ -314,18 +508,18 @@ export function InterviewGreetingRoom({
             {/* Badge overlay on top-left */}
             <div className="absolute top-4 left-4 z-10">
               <span className="bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-3 py-1 rounded-full border border-white/10 shadow-sm flex items-center gap-1.5">
-                <Volume2 className="w-3.5 h-3.5 text-[#f59e0b]" />
+                <Volume2 className="w-3.5 h-3.5 text-accent" />
                 <span>{interviewer.name}</span>
-                <span className="text-zinc-400 text-[10px]">({interviewer.role})</span>
+                <span className="text-zinc-400 text-xs font-normal">({interviewer.role})</span>
               </span>
             </div>
 
             {/* Live Audio Waveform at bottom of Interviewer box */}
-            <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between z-10 bg-black/50 backdrop-blur-md border border-white/10 rounded-xl px-4 py-2.5">
+            <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between z-10 bg-black/60 backdrop-blur-md border border-white/10 rounded-xl px-4 py-2.5">
               <div className="flex items-center gap-2">
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    interviewerSpeaking ? 'bg-[#f59e0b] animate-ping' : 'bg-emerald-500'
+                    interviewerSpeaking ? 'bg-accent animate-ping' : 'bg-success'
                   }`}
                 />
                 <span className="text-xs font-medium text-white">
@@ -340,7 +534,7 @@ export function InterviewGreetingRoom({
                     key={i}
                     style={{ height: `${h * 0.6}px` }}
                     className={`w-1 rounded-full transition-all duration-75 ${
-                      interviewerSpeaking ? 'bg-[#f59e0b]' : 'bg-zinc-600'
+                      interviewerSpeaking ? 'bg-accent' : 'bg-white/20'
                     }`}
                   />
                 ))}
@@ -350,9 +544,9 @@ export function InterviewGreetingRoom({
         </div>
 
         {/* RIGHT BOX: Candidate Live Camera Feed */}
-        <div className="rounded-3xl border border-border dark:border-white/10 bg-[#161224] p-2 sm:p-3 shadow-2xl relative overflow-hidden flex flex-col justify-between aspect-[4/3] sm:aspect-[16/11]">
-          <div className="relative w-full h-full rounded-2xl overflow-hidden bg-[#120e1e] flex items-center justify-center">
-            {/* Live Camera Feed - Always in DOM to prevent ref detachment */}
+        <div className="rounded-2xl border border-border bg-surface p-2 sm:p-3 shadow-sm relative overflow-hidden flex flex-col justify-between aspect-[4/3] sm:aspect-[16/11]">
+          <div className="relative w-full h-full rounded-xl overflow-hidden bg-bg flex items-center justify-center">
+            {/* Live Camera Feed */}
             <video
               ref={(el) => {
                 userVideoRef.current = el;
@@ -382,29 +576,37 @@ export function InterviewGreetingRoom({
             {/* Gradient bottom overlay */}
             <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
 
-            {/* Center glowing rank emblem */}
+            {/* Rank emblem */}
             <div className="absolute top-4 right-4 z-10">
               <span className="bg-black/60 backdrop-blur-md text-amber-400 text-xs font-semibold px-3 py-1 rounded-full border border-amber-500/30 shadow-sm flex items-center gap-1.5">
                 <Shield className="w-3.5 h-3.5 text-amber-400" />
-                <span>Rank: Soldier</span>
+                <span>Rank: {candidateRank}</span>
               </span>
             </div>
 
-            {/* Candidate Bottom-Left Badge matching screenshot */}
+            {/* Candidate Bottom-Left Badge */}
             <div className="absolute bottom-4 left-4 z-10">
               <div className="bg-black/60 backdrop-blur-md text-white text-xs font-semibold px-3.5 py-1.5 rounded-xl border border-white/10 shadow-sm flex items-center gap-2">
-                <Mic className={`w-3.5 h-3.5 ${candidateSpeaking ? 'text-emerald-400 animate-pulse' : 'text-[#f59e0b]'}`} />
+                <Mic
+                  className={`w-3.5 h-3.5 ${
+                    candidateSpeaking ? 'text-success animate-pulse' : 'text-accent'
+                  }`}
+                />
                 <span>{candidateName} (you)</span>
-                <span className={`${candidateSpeaking ? 'text-emerald-400 font-semibold' : 'text-zinc-300'} text-[11px]`}>
+                <span
+                  className={`${
+                    candidateSpeaking ? 'text-success font-semibold' : 'text-zinc-300'
+                  } text-xs`}
+                >
                   {candidateSpeaking ? '· Speaking' : '· Listening'}
                 </span>
               </div>
             </div>
 
-            {/* Session Timer at bottom right */}
+            {/* Session Timer at bottom right (using configured duration constant) */}
             <div className="absolute bottom-4 right-4 z-10">
               <span className="text-xs font-mono font-bold text-zinc-300 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
-                45:00
+                {durationMinutes}:00
               </span>
             </div>
           </div>
@@ -412,50 +614,75 @@ export function InterviewGreetingRoom({
       </div>
 
       {/* Interactive Speech & Reply Bar */}
-      <div className="rounded-2xl border border-border dark:border-white/10 bg-surface dark:bg-[#181324] p-5 shadow-xl">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#f59e0b] block">
+      <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div className="space-y-1 max-w-2xl">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-accent block">
               {interviewerSpeaking
                 ? `${interviewer.name.toUpperCase()} IS SPEAKING:`
                 : candidateSpeaking
                 ? 'HEARING YOU SPEAK:'
-                : 'SPEAK INTO YOUR MICROPHONE OR PICK A RESPONSE:'}
+                : 'SPEAK INTO YOUR MICROPHONE OR SELECT A RESPONSE:'}
             </span>
-            <p className="text-sm sm:text-base font-serif text-text-primary dark:text-white italic">
-              {greetingPhase === 'interviewer_greeting' &&
-                `"Hi ${candidateName}! I'm ${interviewer.name}, and I will be taking your technical interview today. How are you doing today?"`}
-              {greetingPhase === 'candidate_answering' &&
-                (candidateReply
+            <p className="text-sm sm:text-base text-text-primary italic leading-relaxed">
+              {interviewerSpeaking && interviewerSpeechText
+                ? `"${interviewerSpeechText}"`
+                : greetingPhase === 'interviewer_greeting'
+                ? `"Hi ${candidateName}! I'm ${interviewer.name}, and I will be taking your technical interview today. How are you doing today?"`
+                : greetingPhase === 'candidate_answering'
+                ? candidateReply
                   ? `"${candidateReply}"`
-                  : 'Speak into your microphone or pick a response below...')}
-              {greetingPhase === 'interviewer_transition' &&
-                `"Wonderful! Let's start with your coding round."`}
-              {greetingPhase === 'ready_to_code' &&
-                `Switching to coding workspace...`}
+                  : interviewerSpeechText
+                  ? `"${interviewerSpeechText}"`
+                  : 'Speak into your microphone or select below...'
+                : greetingPhase === 'interviewer_speaking'
+                ? `"${interviewerSpeechText}"`
+                : greetingPhase === 'interviewer_transition'
+                ? `"${interviewerSpeechText}"`
+                : `Switching to coding workspace...`}
             </p>
           </div>
 
-          {/* Quick-reply chips for fast conversational responses */}
+          {/* Quick-reply chips available during candidate answering phase */}
           {greetingPhase === 'candidate_answering' && (
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  void handleCandidateResponse("I'm doing great, excited to be here!")
-                }
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-[#f59e0b] border border-amber-500/30 transition-all cursor-pointer shadow-sm active:scale-95"
+                onClick={() => void handleCandidateUtterance("I'm doing great, excited to be here!")}
+                disabled={processingRef.current}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-accent-subtle hover:bg-accent/20 text-accent border border-accent/30 transition-all cursor-pointer shadow-sm active:scale-95 focus-ring disabled:opacity-50"
               >
-                🎙 &ldquo;I&apos;m doing great, excited to be here!&rdquo;
+                🎙 &ldquo;I&apos;m doing great, excited!&rdquo;
               </button>
+
               <button
                 type="button"
-                onClick={() =>
-                  void handleCandidateResponse('Doing well, thank you! Ready.')
-                }
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition-all cursor-pointer shadow-sm active:scale-95"
+                onClick={() => void handleCandidateUtterance('How long will this interview be?')}
+                disabled={processingRef.current}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface-hover text-text-muted border border-border transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1 focus-ring disabled:opacity-50"
               >
-                🎙 &ldquo;Doing well, thank you! Ready.&rdquo;
+                <HelpCircle className="w-3 h-3 text-accent" />
+                <span>&ldquo;How long is this round?&rdquo;</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleCandidateUtterance('Can I ask questions while coding?')}
+                disabled={processingRef.current}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface-hover text-text-muted border border-border transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1 focus-ring disabled:opacity-50"
+              >
+                <HelpCircle className="w-3 h-3 text-accent" />
+                <span>&ldquo;Can I ask questions while coding?&rdquo;</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleCandidateUtterance("No questions, I'm ready to begin!")}
+                disabled={processingRef.current}
+                className="px-4 py-2 rounded-lg text-xs font-semibold bg-accent hover:bg-accent-hover text-accent-foreground shadow-sm transition-all cursor-pointer active:scale-95 flex items-center gap-1.5 focus-ring disabled:opacity-50"
+              >
+                <span>🎙 &ldquo;No questions, ready to begin!&rdquo;</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
