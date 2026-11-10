@@ -17,9 +17,15 @@ import { runTestCases } from '@/lib/judge';
 
 export const maxDuration = 120;
 
-// Evaluation JSON is long (many free-text fields). The 2048-token default truncated it and made
-// the whole report fail, so give it room and a longer timeout.
-const EVAL_LLM_OPTIONS = { maxTokens: 6144, timeoutMs: 45000, maxSchemaAttempts: 1 } as const;
+const EVAL_LLM_OPTIONS = {
+  provider: 'groq',
+  fallbackOrder: ['groq', 'gemini', 'deepseek', 'openrouter'],
+  allowMockFallback: false,
+  maxTokens: 4096,
+  timeoutMs: 20000,
+  maxRetries: 0,
+  maxSchemaAttempts: 0,
+} as const;
 
 export async function POST(req: NextRequest) {
   try {
@@ -177,29 +183,22 @@ Return strict JSON matching the schema.`,
       ];
 
       let data: TechnicalEvaluation;
+      let evaluationProvider: string;
+      let evaluationModel: string;
       try {
-        // Never fall back to the canned mock report here: it would show a made-up score.
-        ({ data } = await generateWithSchema(messages, TechnicalEvaluationSchema, {
-          ...EVAL_LLM_OPTIONS,
-          allowMockFallback: false,
-        }));
+        const result = await generateWithSchema(messages, TechnicalEvaluationSchema, EVAL_LLM_OPTIONS);
+        data = result.data;
+        evaluationProvider = result.providerUsed;
+        evaluationModel = result.modelUsed;
       } catch (llmErr) {
-        console.error('Technical evaluation LLM failed, using test-result-only report:', llmErr);
-        const pct = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0;
-        data = {
-          score: pct,
-          correctness: pct,
-          approach: pct,
-          complexityAnalysis: pct,
-          communication: pct,
-          englishGrammarFeedback: '',
-          grammarMistakes: [],
-          feedback:
-            'The AI feedback service was unavailable, so this report only reflects the automated test results for your code.',
-          timeComplexity: 'Not analysed',
-          spaceComplexity: 'Not analysed',
-          passed: totalTests > 0 && passedTests === totalTests,
-        };
+        console.error('Technical evaluation LLM failed:', llmErr);
+        return NextResponse.json(
+          {
+            error: 'The AI could not generate your interview report. Your test results are preserved; please retry.',
+            testResults: { totalTests, passedTests },
+          },
+          { status: 503 }
+        );
       }
       if (body.screenSwitchCount !== undefined) {
         data.screenSwitchingInfractions = body.screenSwitchCount;
@@ -239,6 +238,8 @@ Return strict JSON matching the schema.`,
             transcript: JSON.stringify(conversation || []),
             feedbackJson: {
               ...data,
+              evaluationProvider,
+              evaluationModel,
               problemTitle: problem?.title || null,
               rankTier: problem?.rankTier || null,
               totalTests,
@@ -298,6 +299,7 @@ Return strict JSON matching the schema.`,
             success: true,
             interviewId,
             evaluation: data,
+            evaluationSource: { provider: evaluationProvider, model: evaluationModel },
             rankUpdate: {
               league: 'Technical',
               earnedPoints,
@@ -309,7 +311,12 @@ Return strict JSON matching the schema.`,
         }
       }
 
-      return NextResponse.json({ success: true, interviewId, evaluation: data });
+      return NextResponse.json({
+        success: true,
+        interviewId,
+        evaluation: data,
+        evaluationSource: { provider: evaluationProvider, model: evaluationModel },
+      });
     }
 
     if (type === 'HR') {
@@ -330,7 +337,11 @@ Return strict JSON matching the schema.`,
         },
       ];
 
-      const { data } = await generateWithSchema(messages, HREvaluationSchema, EVAL_LLM_OPTIONS);
+      const { data, providerUsed, modelUsed } = await generateWithSchema(
+        messages,
+        HREvaluationSchema,
+        EVAL_LLM_OPTIONS
+      );
 
       if (isDatabaseConfigured() && db && userEmail) {
         try {
@@ -381,6 +392,7 @@ Return strict JSON matching the schema.`,
             success: true,
             interviewId,
             evaluation: data,
+            evaluationSource: { provider: providerUsed, model: modelUsed },
             rankUpdate: {
               league: 'HR',
               earnedPoints: earnedHrPoints,
@@ -392,7 +404,12 @@ Return strict JSON matching the schema.`,
         }
       }
 
-      return NextResponse.json({ success: true, interviewId, evaluation: data });
+      return NextResponse.json({
+        success: true,
+        interviewId,
+        evaluation: data,
+        evaluationSource: { provider: providerUsed, model: modelUsed },
+      });
     }
 
     if (type === 'Resume Review') {
@@ -438,7 +455,11 @@ Return strict JSON matching the schema with:
         },
       ];
 
-      const { data } = await generateWithSchema(messages, ResumeEvaluationSchema, EVAL_LLM_OPTIONS);
+      const { data, providerUsed, modelUsed } = await generateWithSchema(
+        messages,
+        ResumeEvaluationSchema,
+        EVAL_LLM_OPTIONS
+      );
 
       if (isDatabaseConfigured() && db && userEmail) {
         try {
@@ -455,7 +476,12 @@ Return strict JSON matching the schema with:
         }
       }
 
-      return NextResponse.json({ success: true, interviewId, evaluation: data });
+      return NextResponse.json({
+        success: true,
+        interviewId,
+        evaluation: data,
+        evaluationSource: { provider: providerUsed, model: modelUsed },
+      });
     }
 
     return NextResponse.json({ error: 'Unsupported interview type' }, { status: 400 });

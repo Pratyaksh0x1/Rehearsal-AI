@@ -440,7 +440,7 @@ export async function generateWithSchema<T>(
   messages: Message[],
   schema: z.ZodSchema<T>,
   options: GenerateOptions = {}
-): Promise<{ data: T; raw: string; providerUsed: string }> {
+): Promise<{ data: T; raw: string; providerUsed: string; modelUsed: string }> {
   let attempts = 0;
   const maxSchemaAttempts = options.maxSchemaAttempts ?? 2;
 
@@ -459,7 +459,13 @@ export async function generateWithSchema<T>(
 
       const parsedJson = JSON.parse(cleaned);
       const validated = schema.parse(parsedJson);
-      return { data: validated, raw: res.text, providerUsed: res.providerUsed };
+      console.info(`[LLM Schema] Provider ${res.providerUsed} succeeded (${res.modelUsed})`);
+      return {
+        data: validated,
+        raw: res.text,
+        providerUsed: res.providerUsed,
+        modelUsed: res.modelUsed,
+      };
     } catch (parseError: any) {
       console.warn(`[LLM Schema Validation] Attempt ${attempts} failed:`, parseError?.message);
       if (attempts <= maxSchemaAttempts) {
