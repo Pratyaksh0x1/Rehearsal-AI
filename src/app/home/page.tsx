@@ -55,8 +55,8 @@ export default function HomePage() {
 
           {/* Meet Your Panel & Leaderboard Section */}
           <HomePanelLeaderboardSection
-            userPoints={userPoints}
-            userName={username}
+            userPoints={profileData ? userPoints : undefined}
+            userName={profileData ? username : undefined}
           />
 
           {/* Student Reviews & Testimonials */}

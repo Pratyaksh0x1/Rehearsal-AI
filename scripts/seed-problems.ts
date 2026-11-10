@@ -1,50 +1,79 @@
 if (typeof process.loadEnvFile === 'function') {
   try {
     process.loadEnvFile();
-  } catch {}
+  } catch (error) {
+    console.warn('Could not load .env; using environment variables already present.', error);
+  }
 }
 
-import {
-  generateProblemForRank,
-  saveGeneratedProblem,
-  RANK_TOPIC_SPECS,
-} from '../src/lib/problems/generator';
-
 async function main() {
-  const targetRank = process.env.RANK || process.env.TIER;
-  const targetCategory = process.env.CATEGORY;
+  const targetCount = Number(process.env.PROBLEM_BANK_SIZE || 72);
+  if (!Number.isInteger(targetCount) || targetCount < 50 || targetCount > 100) {
+    throw new Error('PROBLEM_BANK_SIZE must be an integer between 50 and 100.');
+  }
 
-  console.log('='.repeat(65));
-  console.log('🎯 Rehearsal AI — Rank-Driven LLM Problem Generator & Seeder');
-  console.log('='.repeat(65));
+  const [{ RANK_DIFFICULTY_MAP }, { generateInterviewProblemForBank }, database] =
+    await Promise.all([
+      import('../src/config/rankDifficulty'),
+      import('../src/lib/problems/generator'),
+      import('../src/db'),
+    ]);
 
-  const rankTiers = targetRank
-    ? [targetRank]
-    : ['Bronze', 'Gold', 'Platinum', 'Diamond', 'Crown', 'Conqueror'];
+  if (!database.isDatabaseConfigured() || !database.db) {
+    throw new Error('A valid DATABASE_URL is required to seed the problem bank.');
+  }
 
-  console.log(`Generating problems for rank tiers: ${rankTiers.join(', ')}`);
-  if (targetCategory) console.log(`Preferred Category: ${targetCategory}`);
+  const slots = Object.values(RANK_DIFFICULTY_MAP).flatMap((profile) =>
+    profile.allowedTopics.map((topic) => ({ rankTier: profile.rankTier, topic }))
+  );
+  const existing = await database.db
+    .select({ title: database.schema.problemBank.title })
+    .from(database.schema.problemBank);
+  const generatedTitles = existing.map((problem) => problem.title);
+  let insertedCount = 0;
+  let duplicateCount = 0;
 
-  for (const rank of rankTiers) {
-    const spec = RANK_TOPIC_SPECS[rank] || RANK_TOPIC_SPECS.Bronze;
-    console.log(`\nGenerating problem for Tier: [${rank}] (${spec.difficulty.toUpperCase()} difficulty)...`);
+  console.log(`Generating ${targetCount} verified problems across ${slots.length} rank/topic combinations.`);
 
-    try {
-      const generated = await generateProblemForRank(rank, targetCategory);
-      console.log(`  ✓ Generated: "${generated.title}" (${generated.category})`);
-      console.log(`  ✓ Slug: ${generated.slug}`);
-      console.log(`  ✓ Test Cases: ${generated.test_cases.filter((t: any) => !t.is_hidden).length} visible + ${generated.test_cases.filter((t: any) => t.is_hidden).length} hidden`);
-      console.log(`  ✓ Starter Code: Python, JavaScript, C++, Java generated`);
-      console.log(`  ✓ Saved to src/data/problems/${generated.slug}.json & Supabase DB`);
-    } catch (err: any) {
-      console.error(`  ❌ Failed generating problem for ${rank}:`, err?.message || err);
+  for (let index = 0; index < targetCount; index++) {
+    const slot = slots[index % slots.length];
+    const { bankRecord } = await generateInterviewProblemForBank({
+      rankTier: slot.rankTier,
+      topic: slot.topic,
+      previousProblemTitles: generatedTitles,
+    });
+
+    const inserted = await database.db
+      .insert(database.schema.problemBank)
+      .values({
+        id: bankRecord.id,
+        rankTier: bankRecord.rankTier,
+        difficulty: bankRecord.difficulty,
+        topic: slot.topic,
+        title: bankRecord.title,
+        payload: bankRecord,
+      })
+      .onConflictDoNothing()
+      .returning({ id: database.schema.problemBank.id });
+
+    generatedTitles.push(bankRecord.title);
+    if (inserted.length > 0) {
+      insertedCount++;
+      console.log(
+        `[${index + 1}/${targetCount}] Saved ${slot.rankTier} / ${slot.topic}: ${bankRecord.title}`
+      );
+    } else {
+      duplicateCount++;
+      console.warn(
+        `[${index + 1}/${targetCount}] Skipped duplicate ${slot.rankTier} / ${slot.topic}: ${bankRecord.title}`
+      );
     }
   }
 
-  console.log('\n🎉 Problem seeding process completed successfully!');
+  console.log(`Problem bank seeding finished: ${insertedCount} saved, ${duplicateCount} duplicate(s) skipped.`);
 }
 
-main().catch((err) => {
-  console.error('Seeder failed:', err);
-  process.exit(1);
+main().catch((error) => {
+  console.error('Problem bank seeding failed:', error);
+  process.exitCode = 1;
 });

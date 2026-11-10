@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type LLMProvider = 'gemini' | 'deepseek' | 'openrouter' | 'grok';
+export type LLMProvider = 'gemini' | 'deepseek' | 'openrouter' | 'groq' | 'grok';
 
 export interface Message {
   role: 'system' | 'user' | 'assistant';
@@ -39,9 +39,9 @@ export async function generate(
   const primaryProvider =
     options.provider ||
     (process.env.LLM_PROVIDER as LLMProvider) ||
-    'gemini';
+    'groq';
 
-  const fallbackOrder = options.fallbackOrder || ['gemini', 'deepseek', 'openrouter', 'grok'];
+  const fallbackOrder = options.fallbackOrder || ['groq', 'grok', 'gemini', 'deepseek', 'openrouter'];
   const orderedProviders = [
     primaryProvider,
     ...fallbackOrder.filter((p) => p !== primaryProvider),
@@ -54,7 +54,10 @@ export async function generate(
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const result = await executeProvider(provider, messages, options);
-        if (result) return result;
+        if (result) {
+          console.info(`[LLM] Provider ${result.providerUsed} succeeded (${result.modelUsed})`);
+          return result;
+        }
       } catch (err: any) {
         lastError = err;
         console.warn(`[LLM] Provider ${provider} attempt ${attempt + 1} failed:`, err?.message || err);
@@ -98,7 +101,7 @@ export async function* generateStream(
   const primaryProvider =
     options.provider ||
     (process.env.LLM_PROVIDER as LLMProvider) ||
-    'gemini';
+    'groq';
 
   if (primaryProvider === 'gemini' && apiKey) {
     try {
@@ -174,6 +177,7 @@ export async function* generateStream(
   } else if (
     primaryProvider === 'deepseek' ||
     primaryProvider === 'openrouter' ||
+    primaryProvider === 'groq' ||
     primaryProvider === 'grok'
   ) {
     let streamApiKey = '';
@@ -191,13 +195,28 @@ export async function* generateStream(
       streamModel = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat';
       extraHeaders['HTTP-Referer'] = 'https://rehearsal-ai.com';
       extraHeaders['X-Title'] = 'Rehearsal AI';
+    } else if (primaryProvider === 'groq') {
+      const legacyGrokKey = process.env.GROK_API_KEY;
+      streamApiKey =
+        process.env.GROQ_API_KEY ||
+        (legacyGrokKey?.startsWith('gsk_') ? legacyGrokKey : '');
+      streamEndpoint = 'https://api.groq.com/openai/v1/chat/completions';
+      streamModel =
+        process.env.GROQ_MODEL ||
+        process.env.GROK_MODEL ||
+        'openai/gpt-oss-120b';
     } else {
       streamApiKey = process.env.GROK_API_KEY || '';
       streamEndpoint = 'https://api.x.ai/v1/chat/completions';
-      streamModel = process.env.GROK_MODEL || 'grok-beta';
+      streamModel = process.env.GROK_MODEL || 'grok-4.7';
     }
 
     if (streamApiKey) {
+      const controller = new AbortController();
+      const timer = setTimeout(
+        () => controller.abort(),
+        options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+      );
       try {
         const res = await fetch(streamEndpoint, {
           method: 'POST',
@@ -213,7 +232,12 @@ export async function* generateStream(
             max_tokens: options.maxTokens ?? 1024,
             stream: true,
           }),
+          signal: controller.signal,
         });
+
+        if (!res.ok) {
+          throw new Error(`${primaryProvider.toUpperCase()} stream API error ${res.status}: ${await res.text()}`);
+        }
 
         if (res.ok && res.body) {
           const reader = res.body.getReader();
@@ -245,10 +269,15 @@ export async function* generateStream(
             }
           }
 
-          if (yieldedAny) return;
+          if (yieldedAny) {
+            console.info(`[LLM Stream] Provider ${primaryProvider} succeeded (${streamModel})`);
+            return;
+          }
         }
       } catch (streamErr) {
         console.warn(`[LLM Stream] ${primaryProvider} stream notice, falling back to generate():`, streamErr);
+      } finally {
+        clearTimeout(timer);
       }
     }
   }
@@ -331,7 +360,7 @@ async function executeProvider(
     }
   }
 
-  if (provider === 'deepseek' || provider === 'openrouter' || provider === 'grok') {
+  if (provider === 'deepseek' || provider === 'openrouter' || provider === 'groq' || provider === 'grok') {
     let apiKey: string | undefined;
     let endpoint: string;
     let model: string;
@@ -347,10 +376,20 @@ async function executeProvider(
       model = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat';
       extraHeaders['HTTP-Referer'] = 'https://rehearsal-ai.com';
       extraHeaders['X-Title'] = 'Rehearsal AI';
+    } else if (provider === 'groq') {
+      const legacyGrokKey = process.env.GROK_API_KEY;
+      apiKey =
+        process.env.GROQ_API_KEY ||
+        (legacyGrokKey?.startsWith('gsk_') ? legacyGrokKey : undefined);
+      endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+      model =
+        process.env.GROQ_MODEL ||
+        process.env.GROK_MODEL ||
+        'openai/gpt-oss-120b';
     } else {
       apiKey = process.env.GROK_API_KEY;
       endpoint = 'https://api.x.ai/v1/chat/completions';
-      model = process.env.GROK_MODEL || 'grok-beta';
+      model = process.env.GROK_MODEL || 'grok-4.7';
     }
 
     if (!apiKey) return null;

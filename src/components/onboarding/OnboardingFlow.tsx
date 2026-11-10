@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { captureEvent, identifyUser } from '@/lib/analytics/posthog';
@@ -8,6 +8,7 @@ import { IntroGuideSection } from './IntroGuideSection';
 import { ResumeRadarScanAnimation } from './ResumeRadarScanAnimation';
 import { ATSScoreReportSection } from './ATSScoreReportSection';
 import { FlashyRankRevealAnimation } from './FlashyRankRevealAnimation';
+import type { ResumeProfile } from '@/lib/llm/schemas';
 
 type OnboardingStep = 'intro' | 'parsing' | 'ats_score' | 'rank_reveal';
 
@@ -19,11 +20,14 @@ export function OnboardingFlow() {
   const [username, setUsername] = useState(user?.username || user?.name || '');
   const [file, setFile] = useState<File | null>(null);
 
-  // Resume evaluation result state
-  const [atsScore, setAtsScore] = useState<number>(97);
+  const [atsScore, setAtsScore] = useState<number | null>(null);
   const [topChanges, setTopChanges] = useState<string[]>([]);
-  const [resumeText, setResumeText] = useState<string>('');
-  const [resumeUrl, setResumeUrl] = useState<string>('');
+  const [sectionWiseNotes, setSectionWiseNotes] = useState<Record<string, string>>({});
+  const [parsedResume, setParsedResume] = useState<ResumeProfile | null>(null);
+  const [onboardingError, setOnboardingError] = useState<string | null>(null);
+  const [resumeProcessed, setResumeProcessed] = useState(false);
+  const [scanAnimationComplete, setScanAnimationComplete] = useState(false);
+  const handleScanComplete = useCallback(() => setScanAnimationComplete(true), []);
 
   // Pre-fill username from authenticated Google account if available
   useEffect(() => {
@@ -32,10 +36,20 @@ export function OnboardingFlow() {
     }
   }, [user, username]);
 
+  useEffect(() => {
+    if (step === 'parsing' && resumeProcessed && scanAnimationComplete && atsScore !== null) {
+      setStep('ats_score');
+      captureEvent('onboarding_ats_score_viewed', { score: atsScore });
+    }
+  }, [step, resumeProcessed, scanAnimationComplete, atsScore]);
+
   // Handle Step 1 -> Step 2
   const handleBegin = async (candidateName: string, candidateFile: File | null) => {
     setUsername(candidateName);
     setFile(candidateFile);
+    setOnboardingError(null);
+    setResumeProcessed(false);
+    setScanAnimationComplete(false);
     setStep('parsing');
 
     captureEvent('onboarding_intro_completed', {
@@ -43,7 +57,6 @@ export function OnboardingFlow() {
       hasResume: Boolean(candidateFile),
     });
 
-    // Single atomic request: name + optional resume
     try {
       const formData = new FormData();
       formData.append('username', candidateName.trim());
@@ -56,41 +69,54 @@ export function OnboardingFlow() {
         body: formData,
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.atsScore) setAtsScore(data.atsScore);
-        if (data.topChanges?.length) setTopChanges(data.topChanges);
-        if (data.resumeText) setResumeText(data.resumeText);
-        if (data.resumeUrl) setResumeUrl(data.resumeUrl);
-
-        updateUser({
-          username: candidateName.trim(),
-          rank: 'Bronze',
-          points: 100,
-          isOnboarded: true,
-          onboardedAt: data.onboardedAt || new Date().toISOString(),
-          resumeText: data.resumeText || user?.resumeText,
-          resumeUrl: data.resumeUrl || user?.resumeUrl,
-        });
-
-        identifyUser(user?.id || candidateName.trim(), {
-          username: candidateName.trim(),
-          rank: 'Bronze',
-          email: user?.email,
-        });
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        console.warn('Onboarding error:', errData.error);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Unable to process your resume. Please try again.');
       }
-    } catch (saveErr) {
-      console.warn('Profile onboard error:', saveErr);
-    }
-  };
+      if (
+        typeof data.atsScore !== 'number' ||
+        !Number.isFinite(data.atsScore) ||
+        data.atsScore < 0 ||
+        data.atsScore > 100 ||
+        typeof data.resumeText !== 'string' ||
+        !data.resumeText.trim() ||
+        !data.parsedResume ||
+        typeof data.parsedResume !== 'object'
+      ) {
+        throw new Error('Resume evaluation returned incomplete results. Please try again.');
+      }
 
-  // Handle Step 2 -> Step 3
-  const handleParsingComplete = () => {
-    setStep('ats_score');
-    captureEvent('onboarding_ats_score_viewed', { score: atsScore });
+      setAtsScore(data.atsScore);
+      setTopChanges(Array.isArray(data.topChanges) ? data.topChanges : []);
+      setSectionWiseNotes(
+        data.sectionWiseNotes && typeof data.sectionWiseNotes === 'object'
+          ? data.sectionWiseNotes
+          : {}
+      );
+      setParsedResume(data.parsedResume);
+      updateUser({
+        username: candidateName.trim(),
+        rank: 'Bronze',
+        points: 100,
+        isOnboarded: true,
+        onboardedAt: data.onboardedAt || new Date().toISOString(),
+        resumeText: data.resumeText,
+        resumeUrl: data.resumeUrl || user?.resumeUrl,
+      });
+
+      identifyUser(user?.id || candidateName.trim(), {
+        username: candidateName.trim(),
+        rank: 'Bronze',
+        email: user?.email,
+      });
+      setResumeProcessed(true);
+    } catch (error) {
+      console.error('Onboarding resume processing failed:', error);
+      setOnboardingError(
+        error instanceof Error ? error.message : 'Unable to process your resume. Please try again.'
+      );
+      setStep('intro');
+    }
   };
 
   // Handle Step 3 -> Step 4
@@ -114,14 +140,16 @@ export function OnboardingFlow() {
       {step === 'intro' && (
         <IntroGuideSection
           initialName={username}
-          initialHasResume={Boolean(user?.resumeUrl || user?.resumeText)}
+          initialHasResume={Boolean(user?.resumeText)}
+          initialFile={file}
+          error={onboardingError}
           onBegin={handleBegin}
         />
       )}
 
       {step === 'parsing' && (
         <ResumeRadarScanAnimation
-          onComplete={handleParsingComplete}
+          onComplete={handleScanComplete}
           fileName={file?.name}
         />
       )}
@@ -130,6 +158,8 @@ export function OnboardingFlow() {
         <ATSScoreReportSection
           score={atsScore}
           topChanges={topChanges}
+          sectionWiseNotes={sectionWiseNotes}
+          parsedResume={parsedResume}
           onContinue={handleContinueToRank}
         />
       )}

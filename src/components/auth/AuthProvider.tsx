@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { createClient } from '@/lib/supabase/client';
 import type { User, Session } from '@supabase/supabase-js';
 import { isUserOnboarded } from '@/lib/user';
+import { getCanonicalOrigin } from '@/lib/auth/origin';
 
 export interface AuthUser {
   id: string;
@@ -205,7 +206,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Supabase client is not initialized.');
     }
 
-    const callbackUrl = new URL('/auth/callback', window.location.origin);
+    const currentUrl = new URL(window.location.href);
+    const canonicalOrigin = getCanonicalOrigin(currentUrl);
+    if (canonicalOrigin !== currentUrl.origin) {
+      window.location.replace(
+        new URL(
+          `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+          canonicalOrigin
+        ).toString()
+      );
+      return;
+    }
+
+    const callbackUrl = new URL(
+      '/auth/callback',
+      canonicalOrigin
+    );
     if (nextPath && nextPath.startsWith('/') && !nextPath.startsWith('//')) {
       callbackUrl.searchParams.set('next', nextPath);
     }

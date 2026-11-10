@@ -10,7 +10,9 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "tsx src/db/migrate.ts",
-    "seed": "tsx scripts/seed-problems.ts"
+    "seed": "tsx scripts/seed-problems.ts",
+    "seed:problem-bank": "tsx scripts/seed-curated-problem-bank.ts",
+    "seed:problem-bank:llm": "tsx scripts/seed-problems.ts"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.2.2",

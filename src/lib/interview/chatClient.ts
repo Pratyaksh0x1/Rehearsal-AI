@@ -58,23 +58,32 @@ export async function sendChatMessage({
         if (line.startsWith('data: ')) {
           const jsonStr = line.slice(6).trim();
           if (jsonStr) {
+            let parsed: any;
             try {
-              const parsed = JSON.parse(jsonStr);
-              if (parsed.token) {
-                fullReply += parsed.token;
-                onChunk?.(parsed.token);
-              } else if (parsed.done && parsed.fullText) {
-                fullReply = parsed.fullText;
-              }
+              parsed = JSON.parse(jsonStr);
             } catch {
               // ignore malformed JSON chunk
+              continue;
+            }
+
+            if (parsed.error) {
+              throw new Error(String(parsed.error));
+            }
+            if (parsed.token) {
+              fullReply += parsed.token;
+              onChunk?.(parsed.token);
+            } else if (parsed.done && parsed.fullText) {
+              fullReply = parsed.fullText;
             }
           }
         }
       }
     }
 
-    return fullReply || fallbackReply;
+    if (!fullReply) {
+      throw new Error('The AI interviewer returned an empty response.');
+    }
+    return fullReply;
   }
 
   const data = await res.json();

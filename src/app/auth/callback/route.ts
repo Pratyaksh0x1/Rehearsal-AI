@@ -4,9 +4,12 @@ import { db, isDatabaseConfigured } from '@/db';
 import { users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { isUserOnboarded } from '@/lib/user';
+import { getCanonicalOrigin } from '@/lib/auth/origin';
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const callbackUrl = new URL(request.url);
+  const { searchParams } = callbackUrl;
+  const origin = getCanonicalOrigin(callbackUrl);
   const code = searchParams.get('code');
   const rawNext = searchParams.get('next') || '/home';
   const safeNext = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/home';
@@ -53,4 +56,3 @@ export async function GET(request: Request) {
   // Return user to login or home if exchange fails
   return NextResponse.redirect(`${origin}/`);
 }
-

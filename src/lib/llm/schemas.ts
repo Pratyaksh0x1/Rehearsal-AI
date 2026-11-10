@@ -51,6 +51,36 @@ export const ResumeEvaluationSchema = z.object({
   ),
 });
 
+export const ResumeProfileSchema = z.object({
+  fullName: z.string().describe('Name explicitly shown on the resume; empty if absent'),
+  headline: z.string().describe('Professional title or headline; empty if absent'),
+  summary: z.string().describe('Resume summary/objective; empty if absent'),
+  skills: z.array(z.string()).describe('Skills explicitly listed on the resume'),
+  experience: z.array(z.object({
+    title: z.string(),
+    company: z.string(),
+    dates: z.string(),
+    details: z.array(z.string()),
+  })),
+  projects: z.array(z.object({
+    name: z.string(),
+    technologies: z.array(z.string()),
+    details: z.array(z.string()),
+  })),
+  education: z.array(z.object({
+    institution: z.string(),
+    degree: z.string(),
+    dates: z.string(),
+  })),
+  certifications: z.array(z.string()),
+});
+
+export const OnboardingResumeEvaluationSchema = ResumeEvaluationSchema.omit({
+  rewrittenBullets: true,
+}).extend({
+  parsedResume: ResumeProfileSchema,
+});
+
 export const ExplainerResponseSchema = z.object({
   isCsTopic: z.boolean().describe("Whether the question is directly related to Computer Science, software engineering, or technical interview topics"),
   blackboardTitle: z.string().describe("Concise title of the concept for the blackboard header"),
@@ -68,6 +98,7 @@ export const ExplainerResponseSchema = z.object({
 export type TechnicalEvaluation = z.infer<typeof TechnicalEvaluationSchema>;
 export type HREvaluation = z.infer<typeof HREvaluationSchema>;
 export type ResumeEvaluation = z.infer<typeof ResumeEvaluationSchema>;
+export type ResumeProfile = z.infer<typeof ResumeProfileSchema>;
 export type ExplainerResponse = z.infer<typeof ExplainerResponseSchema>;
 
 export const GreetingResponseSchema = z.object({
@@ -91,13 +122,15 @@ export const GeneratedProblemSchema = z.object({
     .min(3)
     .describe("Clear, concise title of the DSA problem without LeetCode problem numbers"),
   // LLMs often answer "easy" / "HARD"; normalise instead of failing the whole generation.
-  difficulty: z.preprocess(
-    (v) =>
-      typeof v === 'string' && v.trim()
-        ? v.trim().charAt(0).toUpperCase() + v.trim().slice(1).toLowerCase()
-        : v,
-    z.enum(['Easy', 'Medium', 'Hard'])
-  ),
+  difficulty: z
+    .string()
+    .transform((value) => value.trim().toLowerCase())
+    .pipe(z.enum(['easy', 'medium', 'hard']))
+    .transform((value): 'Easy' | 'Medium' | 'Hard' => {
+      if (value === 'easy') return 'Easy';
+      if (value === 'medium') return 'Medium';
+      return 'Hard';
+    }),
   topics: z
     .array(z.string())
     .min(1)
@@ -190,5 +223,3 @@ export const GeneratedProblemSchema = z.object({
 });
 
 export type GeneratedProblem = z.infer<typeof GeneratedProblemSchema>;
-
-

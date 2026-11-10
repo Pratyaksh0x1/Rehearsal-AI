@@ -7,7 +7,9 @@ import {
   timestamp,
   index,
   jsonb,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import type { GeneratedProblemBankRecord } from '@/lib/problems/generator';
 
 export const users = pgTable(
   'users',
@@ -97,6 +99,24 @@ export const problems = pgTable(
   })
 );
 
+export const problemBank = pgTable(
+  'problem_bank',
+  {
+    id: varchar('id', { length: 64 }).primaryKey(),
+    rankTier: varchar('rank_tier', { length: 32 }).notNull(),
+    difficulty: varchar('difficulty', { length: 64 }).notNull(),
+    topic: varchar('topic', { length: 128 }).notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    payload: jsonb('payload').$type<GeneratedProblemBankRecord>().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    rankTierIdx: index('problem_bank_rank_tier_idx').on(table.rankTier),
+    topicIdx: index('problem_bank_topic_idx').on(table.rankTier, table.topic),
+    titleIdx: uniqueIndex('problem_bank_rank_title_unique').on(table.rankTier, table.title),
+  })
+);
+
 export const reports = pgTable(
   'reports',
   {
@@ -123,7 +143,7 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Interview = typeof interviews.$inferSelect;
 export type Problem = typeof problems.$inferSelect;
+export type ProblemBankEntry = typeof problemBank.$inferSelect;
 export type ProblemAttempt = typeof problemAttempts.$inferSelect;
 export type Report = typeof reports.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
-

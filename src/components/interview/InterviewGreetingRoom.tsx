@@ -380,7 +380,7 @@ export function InterviewGreetingRoom({
       restartRecognition();
     } catch (err: any) {
       console.error('Greeting room communication error:', err);
-      toast.error('Network issue connecting to interviewer. Please try again.');
+      toast.error(err?.message || 'Network issue connecting to interviewer. Please try again.');
 
       setInterviewerSpeaking(false);
       interviewerSpeakingRef.current = false;

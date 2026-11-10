@@ -21,8 +21,8 @@ interface LeaderboardUserItem {
 }
 
 export function HomePanelLeaderboardSection({
-  userPoints = 100,
-  userName = 'You',
+  userPoints,
+  userName,
 }: HomePanelLeaderboardSectionProps) {
   // Panelists list matching Image 1
   const panelists = [
@@ -254,40 +254,38 @@ export function HomePanelLeaderboardSection({
             </div>
 
             {/* YOU ARE HERE Card */}
-            <div className="rounded-xl bg-accent-subtle border border-accent/20 p-3.5 sm:p-4 flex items-center justify-between shadow-sm mt-6">
-              <div className="flex items-center gap-3">
-                {/* 2-line YOU ARE HERE tag */}
-                <div className="flex flex-col text-[10px] font-mono font-bold uppercase tracking-wider text-accent leading-tight">
-                  <span>YOU ARE</span>
-                  <span>HERE</span>
+            {userPoints !== undefined && userName !== undefined && (
+              <div className="rounded-xl bg-accent-subtle border border-accent/20 p-3.5 sm:p-4 flex items-center justify-between shadow-sm mt-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col text-[10px] font-mono font-bold uppercase tracking-wider text-accent leading-tight">
+                    <span>YOU ARE</span>
+                    <span>HERE</span>
+                  </div>
+
+                  <div className="relative w-9 h-9 flex-shrink-0 drop-shadow">
+                    <Image
+                      src={RANKS[calculateRankFromPoints(userPoints)].badgeUrl}
+                      alt={`${RANKS[calculateRankFromPoints(userPoints)].displayName} Rank`}
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+
+                  <div className="flex flex-col">
+                    <span className="font-bold text-base sm:text-lg text-text-primary">
+                      {userName === 'Candidate' ? 'You' : userName}
+                    </span>
+                    <span className="text-[11px] font-mono text-text-subtle uppercase">
+                      {RANKS[calculateRankFromPoints(userPoints)].displayName} Tier
+                    </span>
+                  </div>
                 </div>
 
-                {/* Current User Real Rank Emblem */}
-                <div className="relative w-9 h-9 flex-shrink-0 drop-shadow">
-                  <Image
-                    src={RANKS[calculateRankFromPoints(userPoints)].badgeUrl}
-                    alt={`${RANKS[calculateRankFromPoints(userPoints)].displayName} Rank`}
-                    fill
-                    className="object-contain"
-                  />
-                </div>
-
-                {/* User Name */}
-                <div className="flex flex-col">
-                  <span className="font-bold text-base sm:text-lg text-text-primary">
-                    {userName === 'Candidate' ? 'You' : userName}
-                  </span>
-                  <span className="text-[11px] font-mono text-text-subtle uppercase">
-                    {RANKS[calculateRankFromPoints(userPoints)].displayName} Tier
-                  </span>
-                </div>
+                <span className="font-bold text-lg sm:text-xl text-text-primary font-mono">
+                  {userPoints} pts
+                </span>
               </div>
-
-              {/* Current Points */}
-              <span className="font-bold text-lg sm:text-xl text-text-primary font-mono">
-                {userPoints} pts
-              </span>
-            </div>
+            )}
           </div>
 
           {/* Bottom Action Link */}

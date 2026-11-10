@@ -4,16 +4,64 @@
 
 **AI-Powered Mock Interview Platform for Engineering Students**
 
-Practice technical coding, behavioral HR, and resume review interviews with realistic AI interviewers — complete with voice conversation, live code execution, proctoring, and detailed performance reports.
+</div>
+
+## Built for the Great Indian AI Internship Challenge (Gnani AI)
+
+Rehearsal AI is an interview-practice platform for technical coding, behavioral HR, and resume reviews, with a CS concept explainer. It uses Gnani for speech-to-text and text-to-speech so interview voice interactions can use its speech services and configured voices.
+
+## Demo
+
+- [Demo video link: add before submitting]
+- [Screenshot 1: add before submitting]
+- [Screenshot 2: add before submitting]
+- [Screenshot 3: add before submitting]
+
+## How we use Gnani AI
+
+### Prisma speech-to-text
+
+By default, the server calls `POST https://api.vachana.ai/stt/v3` (the STT v3 endpoint). It sends the audio, `GNANI_LANGUAGE` by default (or a language supplied to the API route), and verbatim format. The client also sends a JSON `bias_list` of technical terms such as `hashmap`, `dijkstra`, and `memoization`, with `bias_score` set to `1.0`; the Gnani client comments identify these as words Prisma v2.5 tends to miss in coding interviews.
+
+### Timbre text-to-speech
+
+By default, the TTS endpoint is `POST https://api.vachana.ai/api/v1/tts/inference`. The current interview panel and Concept Explainer configurations use `timbre-v2.5`. Each interview panelist selects a voice and model in `src/config/panels.ts`; each Concept Explainer language selects a `voiceName` and model in `src/config/languages.ts`. In the interview `VoicePanel`, streamed LLM output is split at sentence boundaries, sent to TTS in queued chunks (normally up to 260 characters), and played while the next sentence is synthesized.
+
+The Concept Explainer supports **10 configured languages**. It uses browser speech recognition for microphone input, then requests Gnani TTS for the spoken reply (with browser speech synthesis as a fallback).
+
+### Where to look in the code
+
+| File | What it does |
+|------|--------------|
+| `src/lib/voice/gnani.ts` | Configures Gnani endpoints, sends Prisma and Timbre requests, and applies the STT technical-vocabulary bias list. |
+| `src/app/api/voice/stt/route.ts` | Authenticated API route that receives audio and calls speech-to-text. |
+| `src/app/api/voice/tts/route.ts` | Authenticated API route that validates and synthesizes speech. |
+| `src/components/voice/VoicePanel.tsx` | Captures interview audio, streams interviewer replies, and queues sentence audio for playback. |
+| `src/app/api/explainer/chat/route.ts` | Generates the localized Concept Explainer response using the configured language. |
+| `src/components/explainer/ExplainerVoicePanel.tsx` | Handles Concept Explainer voice input and spoken replies, including the browser speech fallback. |
+| `src/config/panels.ts` | Assigns a configured voice and TTS model to each interview panelist. |
+| `src/config/languages.ts` | Defines the Concept Explainer languages, Gnani language codes, voices, and models. |
+| `.env.example` | Documents the Gnani API key and optional endpoint, language, voice, and model settings. |
+
+Interview voice flow:
+
+```text
+Mic → Gnani Prisma (STT) → LLM → Gnani Timbre (TTS) → Speaker
+```
+
+The diagram describes the interview voice flow; the Concept Explainer uses browser speech recognition for microphone input.
+
+<div align="center">
 
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-Auth-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com/)
 [![Drizzle](https://img.shields.io/badge/Drizzle-ORM-C5F74F?logo=drizzle&logoColor=black)](https://orm.drizzle.team/)
-[![License](https://img.shields.io/badge/License-Private-red)]()
 
 </div>
+
+Practice technical coding, behavioral HR, and resume review interviews with realistic AI interviewers — complete with voice conversation, live code execution, proctoring, and detailed performance reports.
 
 ---
 
@@ -31,7 +79,7 @@ Practice technical coding, behavioral HR, and resume review interviews with real
 
 - **Multi-Model LLM Engine** — Gemini (primary), with automatic failover to DeepSeek, OpenRouter, and Grok
 - **Voice Conversation** — Gnani.ai STT + TTS integration with live voice-state indicators, mic controls, and animated interviewer avatars
-- **LLM-Generated Problems** — Unique coding problems generated per candidate at interview time, with automated verification pipeline (reference solution + test case validation)
+- **Verified Problem Bank** — Pre-generated problems are selected instantly during technical interviews, with verified live generation as a fallback
 - **Smart Evaluation** — Detailed post-interview reports with category-wise scoring, strengths/weaknesses analysis, and suggested optimal approaches
 
 ### 📚 CS Concept Explainer
@@ -92,7 +140,7 @@ Practice technical coding, behavioral HR, and resume review interviews with real
 | **AI / LLM** | Gemini, DeepSeek, OpenRouter, xAI Grok (multi-provider with failover) |
 | **Voice** | Gnani.ai STT + TTS (Indian English voice models, Timbre v2.5) |
 | **Code Editor** | Monaco Editor (VS Code engine) |
-| **Code Execution** | Local sandbox (Python, JS, C++, Java) + optional Piston remote |
+| **Code Execution** | Local code runner (Python, JS, C++, Java) + optional Piston remote |
 | **UI Components** | Radix UI primitives, Lucide icons, Sonner toasts |
 | **Charts** | Custom SVG radar charts, canvas-confetti celebrations |
 | **Analytics** | PostHog (optional), Vercel Analytics |
@@ -142,16 +190,18 @@ Open `.env` and fill in your credentials:
 | `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase anon/publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase service role key |
-| `LLM_PROVIDER` | ✅ | Primary LLM: `gemini` \| `deepseek` \| `openrouter` \| `grok` |
+| `LLM_PROVIDER` | ✅ | Primary LLM: `groq` \| `grok` \| `gemini` \| `deepseek` \| `openrouter` |
 | `GEMINI_API_KEY` | ✅* | Google Gemini API key |
 | `DEEPSEEK_API_KEY` | ⬜ | DeepSeek API key (fallback) |
 | `OPENROUTER_API_KEY` | ⬜ | OpenRouter API key (fallback) |
+| `GROQ_API_KEY` | ⬜ | Groq API key |
+| `GROQ_MODEL` | ⬜ | Groq model (defaults to `openai/gpt-oss-120b`) |
 | `GROK_API_KEY` | ⬜ | xAI Grok API key (fallback) |
 | `GNANI_API_KEY` | ✅ | Gnani.ai voice services key |
 | `JUDGE_SERVICE_URL` | ⬜ | Remote Piston execution endpoint |
 | `NEXT_PUBLIC_POSTHOG_KEY` | ⬜ | PostHog analytics key |
 
-> *At least one LLM provider key is required. Gemini is recommended as primary.
+> *At least one LLM provider key is required. Groq is the configured primary provider.
 
 ### 3. Set Up the Database
 
@@ -182,7 +232,10 @@ Open [http://localhost:3000](http://localhost:3000) 🎉
 | `npm run db:generate` | Generate Drizzle SQL migrations |
 | `npm run db:push` | Push schema to database |
 | `npm run db:migrate` | Run pending SQL migrations |
-| `npm run seed` | Seed interview problems |
+| `npm run seed:problem-bank` | Verify and save 50 curated problems across rank/topic combinations |
+| `npm run seed:problem-bank:llm` | Generate and verify 72 problems with the configured LLM provider |
+
+Run `npm run db:migrate` before seeding. Set `PROBLEM_BANK_SIZE` to an integer from 50 to 100 to change the number of curated problems. The separate `:llm` command calls the configured LLM provider. Only problems whose reference solutions pass all five expected-output checks are saved. The technical interview page starts fetching a problem as soon as it loads, so the lobby and greeting happen while it is being prepared.
 
 ---
 
@@ -231,7 +284,7 @@ rehearsal-ai/
 │   ├── db/                    # Drizzle schema & client
 │   └── lib/
 │       ├── llm/               # Multi-provider LLM engine & schemas
-│       ├── judge/             # Code execution sandbox
+│       ├── judge/             # Local code runner
 │       ├── problems/          # Problem generation & verification
 │       ├── voice/             # Gnani voice service client
 │       ├── interview/         # Interview chat client
@@ -248,6 +301,7 @@ rehearsal-ai/
 
 - **LLM Provider Required** — At least one LLM provider API key must be configured for AI features. The app supports automatic failover: if Gemini's quota is exhausted, it cascades to DeepSeek → OpenRouter → Grok.
 - **Local Code Execution** — Depends on the corresponding language runtime being installed on the host machine. Alternatively, configure a remote Piston-compatible service.
+- **Code Judge Safety** — The code judge runs submissions as local processes and is meant for local use only. It is not hardened for untrusted code, so do not expose it publicly.
 - **Browser Permissions** — Camera and microphone access must be granted by the user for interview proctoring and voice features.
 - **Development Database** — Always use a development database when testing migrations and seed commands.
 - **Google OAuth** — Must be enabled in the Supabase dashboard with redirect URLs configured for your application origins.

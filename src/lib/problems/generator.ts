@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import { generateWithSchema } from '@/lib/llm';
 import { GeneratedProblemSchema, GeneratedProblem } from '@/lib/llm/schemas';
 import { getRankDifficultyProfile, RankDifficultyConfig } from '@/config/rankDifficulty';
@@ -11,6 +10,7 @@ export interface GenerateProblemParams {
   rankTier: string;
   company?: string | null;
   language?: string;
+  topic?: string;
   previousProblemTitles?: string[];
 }
 
@@ -42,6 +42,22 @@ export interface GeneratedProblemResponse {
     };
     test_cases: TestCase[]; // 3 visible test cases ONLY
   };
+}
+
+export type GeneratedProblemBankRecord = Omit<
+  GeneratedProblemResponse['problem'],
+  'test_cases'
+> & {
+  externalId: string;
+  url: string;
+  starter_code: GeneratedProblem['starterCode'];
+  test_cases: Array<{ input: string; expected_output: string; is_hidden: boolean }>;
+  referenceSolutionPython: string;
+};
+
+interface GeneratedInterviewProblemWithRecord {
+  response: GeneratedProblemResponse;
+  bankRecord: GeneratedProblemBankRecord;
 }
 
 /**
@@ -81,52 +97,91 @@ function getCompanyStylePrompt(company?: string | null): string {
  */
 async function verifyReferenceSolution(
   referenceSolutionPython: string,
-  testCases: GeneratedProblem['testCases'],
-  functionName: string
+  testCases: Array<{ input: unknown[]; expected?: unknown }>,
+  functionName: string,
+  unorderedOutput: boolean
 ): Promise<{ verifiedOutputs: string[]; success: boolean; error?: string }> {
   const executableCode = buildExecutableCode(referenceSolutionPython, 'python', functionName);
-  const verifiedOutputs: string[] = [];
+  const results = await Promise.all(
+    testCases.map(async (tc, i) => {
+      // Serialize input arguments into comma-separated JSON representations
+      const stdin = tc.input.map((arg) => JSON.stringify(arg)).join(', ');
 
-  for (let i = 0; i < testCases.length; i++) {
-    const tc = testCases[i];
-    // Serialize input arguments into comma-separated JSON representations
-    const stdin = tc.input.map((arg) => JSON.stringify(arg)).join(', ');
+      try {
+        const res = await runLocalSandbox({
+          code: executableCode,
+          language: 'python',
+          stdin,
+          timeoutMs: 4000,
+        });
 
-    try {
-      const res = await runLocalSandbox({
-        code: executableCode,
-        language: 'python',
-        stdin,
-        timeoutMs: 4000,
-      });
+        if (res.exitCode !== 0 || res.timedOut) {
+          return {
+            output: null,
+            error: `Test case ${i + 1} execution failed: ${res.stderr || 'Timed out (4s)'}`,
+          };
+        }
 
-      if (res.exitCode !== 0 || res.timedOut) {
+        const out = res.stdout.trim();
+        if (!out) {
+          return {
+            output: null,
+            error: `Test case ${i + 1} produced no output (the reference method must return a value)`,
+          };
+        }
+
+        let actual: unknown = out;
+        try {
+          actual = JSON.parse(out);
+        } catch {
+          // String results are printed without JSON quotes by the Python harness.
+        }
+
+        const normalize = (value: unknown, allowUnordered = false): unknown => {
+          if (Array.isArray(value)) {
+            const items = value.map((item) => normalize(item));
+            return unorderedOutput && allowUnordered
+              ? items.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+              : items;
+          }
+          if (value && typeof value === 'object') {
+            return Object.fromEntries(
+              Object.entries(value as Record<string, unknown>)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([key, item]) => [key, normalize(item)])
+            );
+          }
+          return value;
+        };
+
+        if (
+          JSON.stringify(normalize(actual, true)) !==
+          JSON.stringify(normalize(tc.expected, true))
+        ) {
+          return {
+            output: null,
+            error: `Test case ${i + 1} output mismatch: expected ${JSON.stringify(tc.expected)}, received ${out}`,
+          };
+        }
+
+        return { output: out };
+      } catch (err: any) {
         return {
-          verifiedOutputs: [],
-          success: false,
-          error: `Test case ${i + 1} execution failed: ${res.stderr || 'Timed out (4s)'}`,
+          output: null,
+          error: `Sandbox execution error on test case ${i + 1}: ${err?.message || err}`,
         };
       }
+    })
+  );
 
-      const out = res.stdout.trim();
-      if (!out) {
-        return {
-          verifiedOutputs: [],
-          success: false,
-          error: `Test case ${i + 1} produced no output (the reference method must return a value)`,
-        };
-      }
-      verifiedOutputs.push(out);
-    } catch (err: any) {
-      return {
-        verifiedOutputs: [],
-        success: false,
-        error: `Sandbox execution error on test case ${i + 1}: ${err?.message || err}`,
-      };
-    }
+  const failed = results.find((result) => result.error);
+  if (failed?.error) {
+    return { verifiedOutputs: [], success: false, error: failed.error };
   }
-
-  return { verifiedOutputs, success: true };
+  return {
+    verifiedOutputs: results.map((result) => result.output!),
+    success: true,
+  };
 }
 
 /**
@@ -137,14 +192,41 @@ export async function generateInterviewProblem({
   rankTier,
   company,
   language = 'python',
+  topic,
   previousProblemTitles = [],
 }: GenerateProblemParams): Promise<GeneratedProblemResponse> {
+  const { response } = await generateInterviewProblemWithRecord({
+    rankTier,
+    company,
+    language,
+    topic,
+    previousProblemTitles,
+  });
+  return response;
+}
+
+export async function generateInterviewProblemForBank(
+  params: GenerateProblemParams
+): Promise<GeneratedInterviewProblemWithRecord> {
+  return generateInterviewProblemWithRecord(params);
+}
+
+async function generateInterviewProblemWithRecord({
+  rankTier,
+  company,
+  language = 'python',
+  topic,
+  previousProblemTitles = [],
+}: GenerateProblemParams): Promise<GeneratedInterviewProblemWithRecord> {
   const rankProfile: RankDifficultyConfig = getRankDifficultyProfile(rankTier);
   const companyStyle = getCompanyStylePrompt(company);
 
   // Randomize primary topic from allowed topics
   const allowed = rankProfile.allowedTopics;
-  const primaryTopic = allowed[Math.floor(Math.random() * allowed.length)];
+  if (topic && !allowed.includes(topic)) {
+    throw new Error(`Topic "${topic}" is not configured for rank ${rankProfile.rankTier}.`);
+  }
+  const primaryTopic = topic || allowed[Math.floor(Math.random() * allowed.length)];
   const isCodeforcesStory = Math.random() < 0.35;
   const randomSeed = Math.floor(Math.random() * 100000);
 
@@ -244,6 +326,12 @@ Primary topic: ${primaryTopic}. Return strictly valid JSON adhering to the schem
         maxSchemaAttempts: 1,
       });
       const generated = res.data;
+      const difficulty = (['Easy', 'Medium', 'Hard'] as const).find(
+        (value) => value === generated.difficulty
+      );
+      if (!difficulty) {
+        throw new Error(`Unsupported generated difficulty: ${generated.difficulty}`);
+      }
 
       // Normalise to exactly 5 tests: first 3 visible, last 2 hidden.
       generated.testCases = generated.testCases
@@ -260,7 +348,8 @@ Primary topic: ${primaryTopic}. Return strictly valid JSON adhering to the schem
       const verification = await verifyReferenceSolution(
         generated.referenceSolutionPython,
         generated.testCases,
-        generated.functionSpec.name
+        generated.functionSpec.name,
+        generated.unorderedOutput ?? false
       );
 
       if (!verification.success) {
@@ -291,7 +380,7 @@ Primary topic: ${primaryTopic}. Return strictly valid JSON adhering to the schem
         externalId: problemSlug,
         title: generated.title,
         url: '',
-        difficulty: generated.difficulty,
+        difficulty,
         topics: generated.topics,
         rankTier: rankProfile.rankTier,
         company_tags: company ? [company] : ['General'],
@@ -299,7 +388,7 @@ Primary topic: ${primaryTopic}. Return strictly valid JSON adhering to the schem
         constraints: generated.constraints,
         examples: generated.examples,
         functionSpec: generated.functionSpec,
-        unorderedOutput: generated.unorderedOutput,
+        unorderedOutput: generated.unorderedOutput ?? false,
         starter_code: generated.starterCode,
         starterCode: generated.starterCode,
         test_cases: runnerTestCases, // 3 visible + 2 hidden (stored in server session)
@@ -312,13 +401,19 @@ Primary topic: ${primaryTopic}. Return strictly valid JSON adhering to the schem
       // Return sanitized problem to client: visible test cases ONLY
       const clientVisibleCases = runnerTestCases.filter((t) => !t.is_hidden);
 
+      const bankRecord: GeneratedProblemBankRecord = {
+        ...fullProblemRecord,
+      };
+
       return {
-        problemSessionId,
-        problem: {
+        bankRecord,
+        response: {
+          problemSessionId,
+          problem: {
           id: problemSlug,
           source: 'Rehearsal AI',
           title: generated.title,
-          difficulty: generated.difficulty,
+          difficulty,
           topics: generated.topics,
           rankTier: rankProfile.rankTier,
           company_tags: company ? [company] : ['General'],
@@ -329,6 +424,7 @@ Primary topic: ${primaryTopic}. Return strictly valid JSON adhering to the schem
           unorderedOutput: generated.unorderedOutput,
           starterCode: generated.starterCode,
           test_cases: clientVisibleCases, // Only the 3 visible test cases!
+        },
         },
       };
     } catch (err: any) {

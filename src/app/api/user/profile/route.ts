@@ -212,9 +212,9 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+    if (!/^[a-zA-Z0-9_ ]+$/.test(trimmed)) {
       return NextResponse.json(
-        { error: 'Username can only contain letters, numbers, and underscores' },
+        { error: 'Username can only contain letters, numbers, spaces, and underscores' },
         { status: 400 }
       );
     }

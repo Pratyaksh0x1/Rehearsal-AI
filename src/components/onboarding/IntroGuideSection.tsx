@@ -7,16 +7,22 @@ import { User, FileText, CheckCircle2, AlertCircle, ArrowRight, Upload } from 'l
 interface IntroGuideSectionProps {
   initialName?: string;
   initialHasResume?: boolean;
-  onBegin: (name: string, file: File | null) => void;
+  initialFile?: File | null;
+  error?: string | null;
+  isSubmitting?: boolean;
+  onBegin: (name: string, file: File | null) => void | Promise<void>;
 }
 
 export function IntroGuideSection({
   initialName = '',
   initialHasResume = false,
+  initialFile = null,
+  error: submitError,
+  isSubmitting = false,
   onBegin,
 }: IntroGuideSectionProps) {
   const [name, setName] = useState(initialName || '');
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(initialFile);
   const [errorMessage, setErrorMessage] = useState('');
 
   const displayName = name.trim() || 'there';
@@ -44,8 +50,12 @@ export function IntroGuideSection({
       setErrorMessage('Please enter your name so the interviewer knows who they are talking to.');
       return;
     }
+    if (!file && !initialHasResume) {
+      setErrorMessage('Please upload your PDF resume to continue.');
+      return;
+    }
     setErrorMessage('');
-    onBegin(name.trim(), file);
+    void onBegin(name.trim(), file);
   };
 
   return (
@@ -121,14 +131,15 @@ export function IntroGuideSection({
                   <div className="w-10 h-10 rounded-lg bg-accent-subtle border border-accent/20 text-accent flex items-center justify-center mb-3 shadow-sm">
                     <FileText className="w-5 h-5 text-accent" />
                   </div>
-                  <h4 className="font-semibold text-sm text-text-primary mb-0.5">Your resume</h4>
-                  <p className="text-xs text-text-muted leading-tight mb-3">So the questions are about you</p>
+                  <h4 className="font-semibold text-sm text-text-primary mb-0.5">Your resume (required)</h4>
+                  <p className="text-xs text-text-muted leading-tight mb-3">Upload a PDF so we can review it and tailor questions</p>
                 </div>
 
                 <input
                   id="resume-upload-input"
                   type="file"
                   accept=".pdf,application/pdf"
+                  aria-required={!initialHasResume}
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -155,10 +166,10 @@ export function IntroGuideSection({
             </div>
 
             {/* Error message */}
-            {errorMessage && (
+            {(errorMessage || submitError) && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-danger-subtle border border-danger/30 text-xs text-danger">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{errorMessage}</span>
+                <span>{errorMessage || submitError}</span>
               </div>
             )}
 
@@ -167,9 +178,10 @@ export function IntroGuideSection({
               <button
                 type="button"
                 onClick={handleStart}
+                disabled={isSubmitting}
                 className="px-7 py-3 rounded-lg bg-accent hover:bg-accent-hover text-accent-foreground font-semibold text-sm shadow-sm transition-all flex items-center gap-2 active:scale-95 focus-ring"
               >
-                <span>Let&apos;s begin</span>
+                <span>{isSubmitting ? 'Preparing your resume...' : 'Let’s begin'}</span>
                 <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
               </button>
 
@@ -183,4 +195,3 @@ export function IntroGuideSection({
     </div>
   );
 }
-

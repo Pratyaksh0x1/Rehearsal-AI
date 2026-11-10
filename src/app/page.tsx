@@ -208,7 +208,7 @@ function LandingPageContent() {
         </section>
 
         {/* 3. Meet Your Panel & Leaderboard Section */}
-        <HomePanelLeaderboardSection userPoints={100} userName="You" />
+        <HomePanelLeaderboardSection />
 
         {/* 4. Reviews Section */}
         <ReviewsSection />

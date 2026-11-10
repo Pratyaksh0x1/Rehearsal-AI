@@ -233,31 +233,60 @@ function TechnicalRoundContent() {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed?.problem && parsed?.problemSessionId) {
-          setProblem(parsed.problem);
-          setProblemSessionId(parsed.problemSessionId);
-
-          const starters: Record<string, string> = {
-            python: parsed.problem.starterCode?.python || parsed.problem.starter_code?.python || DEFAULT_STARTER_CODE.python,
-            javascript: parsed.problem.starterCode?.javascript || parsed.problem.starter_code?.javascript || DEFAULT_STARTER_CODE.javascript,
-            typescript: parsed.problem.starterCode?.typescript || (DEFAULT_STARTER_CODE as any).typescript || '',
-            cpp: parsed.problem.starterCode?.cpp || parsed.problem.starter_code?.cpp || DEFAULT_STARTER_CODE.cpp,
-            java: parsed.problem.starterCode?.java || parsed.problem.starter_code?.java || DEFAULT_STARTER_CODE.java,
-          };
-          setCodeDrafts(starters);
-          setCode(starters[targetLang] || DEFAULT_STARTER_CODE.python);
-
-          const savedCode = sessionStorage.getItem('rehearsal_active_code');
-          if (savedCode) {
-            try {
-              const codeParsed = JSON.parse(savedCode);
-              if (codeParsed.code) setCode(codeParsed.code);
-              if (codeParsed.drafts) setCodeDrafts(codeParsed.drafts);
-              if (codeParsed.language) setLanguage(codeParsed.language);
-            } catch {}
+          let restoredProblem: Problem | null = null;
+          let restoredSessionId: string | null = null;
+          try {
+            const restoreResponse = await fetch('/api/interview/problem-session/restore', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ problemId: parsed.problem.id }),
+            });
+            if (restoreResponse.ok) {
+              const restored = await restoreResponse.json();
+              if (restored?.problem && restored?.problemSessionId) {
+                restoredProblem = restored.problem;
+                restoredSessionId = restored.problemSessionId;
+              }
+            } else if (restoreResponse.status !== 404) {
+              console.warn(
+                '[TechnicalRound] Could not restore cached problem session:',
+                restoreResponse.status
+              );
+            }
+          } catch (restoreError) {
+            console.warn('[TechnicalRound] Could not restore cached problem session:', restoreError);
           }
-          problemLoadInFlightRef.current = false;
-          setIsGeneratingProblem(false);
-          return;
+
+          if (restoredProblem && restoredSessionId) {
+            setProblem(restoredProblem);
+            setProblemSessionId(restoredSessionId);
+
+            const starters: Record<string, string> = {
+              python: restoredProblem.starterCode?.python || restoredProblem.starter_code?.python || DEFAULT_STARTER_CODE.python,
+              javascript: restoredProblem.starterCode?.javascript || restoredProblem.starter_code?.javascript || DEFAULT_STARTER_CODE.javascript,
+              typescript: restoredProblem.starterCode?.typescript || (DEFAULT_STARTER_CODE as any).typescript || '',
+              cpp: restoredProblem.starterCode?.cpp || restoredProblem.starter_code?.cpp || DEFAULT_STARTER_CODE.cpp,
+              java: restoredProblem.starterCode?.java || restoredProblem.starter_code?.java || DEFAULT_STARTER_CODE.java,
+            };
+            setCodeDrafts(starters);
+            setCode(starters[targetLang] || DEFAULT_STARTER_CODE.python);
+
+            const savedCode = sessionStorage.getItem('rehearsal_active_code');
+            if (savedCode) {
+              try {
+                const codeParsed = JSON.parse(savedCode);
+                if (codeParsed.code) setCode(codeParsed.code);
+                if (codeParsed.drafts) setCodeDrafts(codeParsed.drafts);
+                if (codeParsed.language) setLanguage(codeParsed.language);
+              } catch {}
+            }
+            problemLoadInFlightRef.current = false;
+            setIsGeneratingProblem(false);
+            return;
+          }
+
+          sessionStorage.removeItem('rehearsal_active_problem_v2');
+          sessionStorage.removeItem('rehearsal_active_code');
         }
       }
     } catch {}

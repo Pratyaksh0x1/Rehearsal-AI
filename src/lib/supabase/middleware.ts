@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getCanonicalOrigin } from '@/lib/auth/origin';
 
 export async function updateSession(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
@@ -39,7 +40,7 @@ export async function updateSession(request: NextRequest) {
         { status: 401 }
       );
     }
-    const errUrl = new URL('/', request.url);
+    const errUrl = new URL('/', getCanonicalOrigin(request.url));
     errUrl.searchParams.set('auth_error', 'supabase_not_configured');
     return NextResponse.redirect(errUrl);
   }
@@ -91,7 +92,7 @@ export async function updateSession(request: NextRequest) {
         ? `${pathname}${search}`
         : '';
 
-    const loginUrl = new URL('/', request.url);
+    const loginUrl = new URL('/', getCanonicalOrigin(request.url));
     if (safeNext) {
       loginUrl.searchParams.set('next', safeNext);
     }

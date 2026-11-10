@@ -2,23 +2,29 @@
 
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, Check } from 'lucide-react';
+import type { ResumeProfile } from '@/lib/llm/schemas';
 
 interface ATSScoreReportSectionProps {
-  score?: number;
+  score: number | null;
   topChanges?: string[];
+  sectionWiseNotes?: Record<string, string>;
+  parsedResume: ResumeProfile | null;
   onContinue: () => void;
 }
 
 export function ATSScoreReportSection({
-  score = 97,
+  score,
   topChanges = [],
+  sectionWiseNotes = {},
+  parsedResume,
   onContinue,
 }: ATSScoreReportSectionProps) {
   const [animatedScore, setAnimatedScore] = useState(0);
 
   useEffect(() => {
+    if (score === null) return;
     // Count up from 0 to score
-    const target = score || 97;
+    const target = score;
     const duration = 1200;
     const steps = 40;
     const increment = target / steps;
@@ -37,19 +43,16 @@ export function ATSScoreReportSection({
     return () => clearInterval(timer);
   }, [score]);
 
-  // The 10 ATS Checks matching Screenshot 3
-  const checks = [
-    { label: 'Standard sections', value: 100, color: 'bg-emerald-400' },
-    { label: 'Contact details', value: 100, color: 'bg-emerald-400' },
-    { label: 'Bullet points', value: 100, color: 'bg-emerald-400' },
-    { label: 'Measured results', value: 95, color: 'bg-emerald-400' },
-    { label: 'Action verbs', value: 100, color: 'bg-emerald-400' },
-    { label: 'Bullet length', value: 92, color: 'bg-emerald-400' },
-    { label: 'Skills listed', value: 100, color: 'bg-emerald-400' },
-    { label: 'SDE keywords', value: 80, color: 'bg-amber-400' }, // Yellow/amber in screenshot!
-    { label: 'Resume length', value: 100, color: 'bg-emerald-400' },
-    { label: 'Dates', value: 100, color: 'bg-emerald-400' },
-  ];
+  if (score === null) return null;
+
+  const sections = [
+    ['summary', 'Summary'],
+    ['skills', 'Skills'],
+    ['projects', 'Projects'],
+    ['experience', 'Experience'],
+    ['education', 'Education'],
+    ['formattingAts', 'Formatting'],
+  ] as const;
 
   const scoreLabel = score >= 90 ? 'Strong' : score >= 75 ? 'Good' : 'Needs Polish';
   const scoreColor = score >= 90 ? 'text-emerald-400' : score >= 75 ? 'text-amber-400' : 'text-orange-400';
@@ -59,8 +62,48 @@ export function ATSScoreReportSection({
     <div className="w-full max-w-5xl mx-auto px-4 py-8 sm:py-12 flex flex-col items-center">
       {/* Top Header */}
       <h2 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-extrabold text-center text-text-primary mb-10 tracking-tight">
-        Here&apos;s how an <span className="italic font-normal text-warning">ATS</span> reads it
+        Your resume review
       </h2>
+
+      {parsedResume && (
+        <div className="w-full rounded-2xl bg-surface border border-border p-6 mb-6 shadow-sm">
+          <div className="mb-4">
+            <h3 className="text-lg font-bold text-text-primary">
+              {parsedResume.fullName || 'Resume details'}
+            </h3>
+            {parsedResume.headline && (
+              <p className="text-sm text-text-muted mt-1">{parsedResume.headline}</p>
+            )}
+          </div>
+          {parsedResume.summary && (
+            <p className="text-sm text-text-muted leading-relaxed mb-4">{parsedResume.summary}</p>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div>
+              <p className="font-semibold text-text-primary mb-1">Skills</p>
+              <p className="text-text-muted leading-relaxed">
+                {parsedResume.skills.length ? parsedResume.skills.join(', ') : 'None identified'}
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-text-primary mb-1">Experience</p>
+              <p className="text-text-muted leading-relaxed">
+                {parsedResume.experience.length
+                  ? parsedResume.experience.map((item) => [item.title, item.company].filter(Boolean).join(' at ')).join(' · ')
+                  : 'None identified'}
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-text-primary mb-1">Projects</p>
+              <p className="text-text-muted leading-relaxed">
+                {parsedResume.projects.length
+                  ? parsedResume.projects.map((project) => project.name).filter(Boolean).join(' · ') || 'None identified'
+                  : 'None identified'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 3-Column Grid matching Screenshot 3 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mb-10 items-stretch">
@@ -112,7 +155,7 @@ export function ATSScoreReportSection({
           </div>
 
           <p className="text-xs text-text-muted leading-relaxed font-normal text-center mt-6 pt-4 border-t border-border">
-            How cleanly an applicant-tracking system can read your resume, and how strong its bullet points look. Our own measure: every company&apos;s ATS reads a little differently.
+            AI-generated assessment based on the text extracted from your uploaded resume. Use it as feedback, not as a guarantee of how every employer&apos;s ATS will score it.
           </p>
         </div>
 
@@ -138,33 +181,24 @@ export function ATSScoreReportSection({
               <div className="flex items-start gap-3 p-3.5 rounded-xl bg-success-subtle border border-success/30">
                 <Check className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-success leading-relaxed font-medium">
-                  Nothing to fix: every check passed. Your interview is where it gets tested.
+                  No specific changes were returned. Review the section notes alongside your resume.
                 </p>
               </div>
             )}
           </div>
         </div>
 
-        {/* COLUMN 3: The ten checks (4 Cols) */}
+        {/* COLUMN 3: Actual section notes (4 Cols) */}
         <div className="lg:col-span-4 rounded-2xl bg-surface border border-border p-6 sm:p-7 flex flex-col justify-between shadow-sm">
-          <h3 className="text-lg font-bold text-text-primary mb-4">
-            The ten checks
-          </h3>
+          <h3 className="text-lg font-bold text-text-primary mb-4">Section notes</h3>
 
-          <div className="space-y-2.5">
-            {checks.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between gap-3 text-xs">
-                <span className="text-text-muted font-normal truncate">
-                  {item.label}
-                </span>
-
-                {/* Progress bar pill */}
-                <div className="w-24 sm:w-28 h-1.5 rounded-full bg-surface-hover overflow-hidden flex-shrink-0 border border-border">
-                  <div
-                    className={`h-full rounded-full ${item.color} transition-all duration-700 shadow-sm`}
-                    style={{ width: `${item.value}%` }}
-                  />
-                </div>
+          <div className="space-y-3">
+            {sections.map(([key, label]) => (
+              <div key={key} className="text-xs">
+                <p className="font-semibold text-text-primary">{label}</p>
+                <p className="mt-0.5 text-text-muted leading-relaxed">
+                  {sectionWiseNotes[key] || 'No specific feedback for this section.'}
+                </p>
               </div>
             ))}
           </div>
@@ -174,7 +208,7 @@ export function ATSScoreReportSection({
       {/* Bottom Subtext & Continue Button */}
       <div className="flex flex-col items-center gap-4">
         <p className="text-xs text-text-muted font-medium text-center">
-          You can update your resume any time from your profile, and see this again.
+          This score was generated from the resume text provided and may vary between reviews.
         </p>
 
         <button
@@ -189,4 +223,3 @@ export function ATSScoreReportSection({
     </div>
   );
 }
-

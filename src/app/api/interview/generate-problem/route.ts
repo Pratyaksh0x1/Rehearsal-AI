@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/supabase/server';
 import { checkRateLimit } from '@/lib/llm/rate-limit';
 import { generateInterviewProblem } from '@/lib/problems/generator';
+import { getBankedInterviewProblem } from '@/lib/problems/bank';
 import { db, isDatabaseConfigured } from '@/db';
 import { interviews } from '@/db/schema';
 import { and, desc, eq } from 'drizzle-orm';
@@ -60,6 +61,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    try {
+      const bankedProblem = await getBankedInterviewProblem(rankTier, previousProblemTitles);
+      if (bankedProblem) return NextResponse.json(bankedProblem);
+    } catch (error) {
+      console.warn('[GenerateProblemAPI] Problem bank unavailable; using live generation:', error);
+    }
+
     const result = await generateInterviewProblem({
       rankTier,
       company,
@@ -91,6 +99,13 @@ export async function GET(req: NextRequest) {
     const rankTier = searchParams.get('rank') || searchParams.get('tier') || 'Bronze';
     const company = searchParams.get('company') || null;
     const language = searchParams.get('lang') || 'python';
+
+    try {
+      const bankedProblem = await getBankedInterviewProblem(rankTier);
+      if (bankedProblem) return NextResponse.json(bankedProblem);
+    } catch (error) {
+      console.warn('[GenerateProblemAPI] Problem bank unavailable; using live generation:', error);
+    }
 
     const result = await generateInterviewProblem({
       rankTier,

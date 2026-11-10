@@ -24,6 +24,7 @@ export function ResumeRadarScanAnimation({
     // Smoothly progress percentage from 0 to 100% over ~4.8 seconds
     const duration = 4800; // ms
     const startTime = Date.now();
+    let completionTimer: ReturnType<typeof setTimeout> | undefined;
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
@@ -32,13 +33,16 @@ export function ResumeRadarScanAnimation({
 
       if (progress >= 100) {
         clearInterval(interval);
-        setTimeout(() => {
+        completionTimer = setTimeout(() => {
           onComplete();
         }, 500);
       }
     }, 40);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (completionTimer) clearTimeout(completionTimer);
+    };
   }, [onComplete]);
 
   // Determine current active phase
@@ -170,10 +174,8 @@ export function ResumeRadarScanAnimation({
       </div>
 
       {/* Percentage Counter & Current Phase */}
-      <div className="space-y-1 mb-8">
-        <div className="text-4xl sm:text-5xl font-mono font-bold text-text-primary tracking-tight">
-          {percent}%
-        </div>
+      <div className="flex items-center justify-center gap-2 mb-8">
+        <Loader2 className="w-4 h-4 animate-spin text-accent" />
         <div className="text-sm sm:text-base text-text-muted tracking-wide">
           {currentPhase.label}
         </div>
@@ -224,4 +226,3 @@ export function ResumeRadarScanAnimation({
     </div>
   );
 }
-
