@@ -21,10 +21,10 @@ const EVAL_LLM_OPTIONS: GenerateOptions = {
   provider: 'groq',
   fallbackOrder: ['groq', 'gemini', 'deepseek', 'openrouter'],
   allowMockFallback: false,
-  maxTokens: 4096,
-  timeoutMs: 20000,
-  maxRetries: 0,
-  maxSchemaAttempts: 0,
+  maxTokens: 10384,
+  timeoutMs: 45000,
+  maxRetries: 2,
+  maxSchemaAttempts: 2,
 };
 
 export async function POST(req: NextRequest) {
