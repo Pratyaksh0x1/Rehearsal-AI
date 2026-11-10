@@ -110,8 +110,11 @@ export const GreetingResponseSchema = z.object({
   intent: z
     .enum(['has_question', 'ready_to_start', 'other'])
     .describe(
-      "Candidate's intent. 'ready_to_start' if the candidate has no questions and is ready to start coding (e.g. 'no questions', 'ready', 'let\\'s go', 'all good', 'start'). 'has_question' if the candidate asks ANY question (e.g. duration, allowed languages, rules, process, whether they can ask questions while coding). 'other' if they are just replying to greeting, expressing feelings, or chatting."
+      "Interpret the latest candidate message using the complete conversation history. 'ready_to_start' only when context shows they are ready to begin coding; understand natural affirmative replies and speech-recognition errors. 'has_question' when they ask about interview details or still have an unresolved question. 'other' for pleasantries or responses that do not indicate readiness. If ambiguous, do not start; ask a brief clarifying question."
     ),
+  action: z
+    .enum(['START_CODING', 'CONTINUE_CONVERSATION'])
+    .describe("Use START_CODING only when intent is ready_to_start; otherwise use CONTINUE_CONVERSATION."),
 });
 
 export type GreetingResponse = z.infer<typeof GreetingResponseSchema>;

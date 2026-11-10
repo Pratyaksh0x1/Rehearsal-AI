@@ -8,6 +8,7 @@ export interface SendChatMessageOptions {
 export interface GreetingChatResponse {
   reply: string;
   intent: 'has_question' | 'ready_to_start' | 'other';
+  action: 'START_CODING' | 'CONTINUE_CONVERSATION';
 }
 
 /**
@@ -133,15 +134,17 @@ export async function sendGreetingChatMessage({
       ? data
       : String(data?.reply || fallbackReply);
 
-  const intent =
-    data?.intent === 'ready_to_start' ||
-    data?.intent === 'has_question' ||
-    data?.intent === 'other'
-      ? data.intent
-      : 'other';
+  if (
+    typeof data?.reply !== 'string' ||
+    !['has_question', 'ready_to_start', 'other'].includes(data?.intent) ||
+    !['START_CODING', 'CONTINUE_CONVERSATION'].includes(data?.action)
+  ) {
+    throw new Error('The AI interviewer returned an invalid response. Please try again.');
+  }
 
   return {
     reply: replyText,
-    intent,
+    intent: data.intent,
+    action: data.action,
   };
 }

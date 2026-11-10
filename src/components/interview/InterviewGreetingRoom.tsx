@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
-import { Mic, ArrowRight, Volume2, Sparkles, Shield, User, HelpCircle } from 'lucide-react';
+import { Mic, Volume2, Sparkles, Shield, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { AIPanelist } from '@/config/panels';
 import { checkProfanity } from '@/lib/moderation/profanity';
@@ -53,6 +53,7 @@ export function InterviewGreetingRoom({
   const [conductWarning, setConductWarning] = useState<{ isOpen: boolean; matchedWord?: string }>({
     isOpen: false,
   });
+  const [readyToTransition, setReadyToTransition] = useState(false);
 
   // Critical State & Synchronization Refs
   const userVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -69,6 +70,7 @@ export function InterviewGreetingRoom({
   const processingRef = useRef(false);
   const interviewerSpeakingRef = useRef(false);
   const isCandidateTurnRef = useRef(false);
+  const transitionStartedRef = useRef(false);
 
   // Latest props & callbacks stored in refs to avoid stale closures
   const speakFnRef = useRef(speakFn);
@@ -77,6 +79,21 @@ export function InterviewGreetingRoom({
   stopSpeakingFnRef.current = stopSpeakingFn;
   const onProceedToCodingRef = useRef(onProceedToCoding);
   onProceedToCodingRef.current = onProceedToCoding;
+
+  useEffect(() => {
+    if (
+      !readyToTransition ||
+      isProblemLoading ||
+      problemLoadError ||
+      !problemTitle ||
+      transitionStartedRef.current
+    ) {
+      return;
+    }
+
+    transitionStartedRef.current = true;
+    onProceedToCodingRef.current();
+  }, [readyToTransition, isProblemLoading, problemLoadError, problemTitle]);
 
   // Initialize candidate camera feed once
   useEffect(() => {
@@ -337,14 +354,12 @@ export function InterviewGreetingRoom({
       });
 
       const reply = result.reply;
-      const intent = result.intent;
-
       // Record assistant reply in conversation memory
       messagesRef.current.push({ role: 'assistant', content: reply });
       setInterviewerSpeechText(reply);
 
       // Handle based on LLM-detected intent
-      if (intent === 'ready_to_start') {
+      if (result.action === 'START_CODING' && result.intent === 'ready_to_start') {
         setGreetingPhase('interviewer_transition');
 
         if (speakFnRef.current) {
@@ -356,11 +371,7 @@ export function InterviewGreetingRoom({
         setInterviewerSpeaking(false);
         interviewerSpeakingRef.current = false;
         setGreetingPhase('ready_to_code');
-
-        // Transition into coding workspace only after speech finishes
-        setTimeout(() => {
-          onProceedToCodingRef.current();
-        }, 900);
+        setReadyToTransition(true);
         return;
       }
 
@@ -484,21 +495,13 @@ export function InterviewGreetingRoom({
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={onProceedToCoding}
-          disabled={isProblemLoading || Boolean(problemLoadError) || !problemTitle}
-          className="text-xs font-semibold text-text-muted hover:text-accent transition-colors flex items-center gap-1 cursor-pointer focus-ring disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <span>
-            {isProblemLoading || !problemTitle
-              ? 'Generating a fresh AI question...'
-              : problemLoadError
+        <span className="text-xs font-semibold text-text-muted">
+          {isProblemLoading || !problemTitle
+            ? 'Preparing coding workspace...'
+            : problemLoadError
               ? 'Question unavailable'
-              : 'Jump to coding'}
-          </span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
+              : 'Coding workspace ready'}
+        </span>
       </div>
 
       {(isProblemLoading || problemLoadError) && (
@@ -667,7 +670,7 @@ export function InterviewGreetingRoom({
                 ? `${interviewer.name.toUpperCase()} IS SPEAKING:`
                 : candidateSpeaking
                 ? 'HEARING YOU SPEAK:'
-                : 'SPEAK INTO YOUR MICROPHONE OR SELECT A RESPONSE:'}
+                : 'SPEAK NATURALLY INTO YOUR MICROPHONE:'}
             </span>
             <p className="text-sm sm:text-base text-text-primary italic leading-relaxed">
               {interviewerSpeaking && interviewerSpeechText
@@ -688,66 +691,12 @@ export function InterviewGreetingRoom({
             </p>
           </div>
 
-          {/* Quick-reply chips available during candidate answering phase */}
-          {greetingPhase === 'candidate_answering' && (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void handleCandidateUtterance("I'm doing great, excited to be here!")}
-                disabled={processingRef.current}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-accent-subtle hover:bg-accent/20 text-accent border border-accent/30 transition-all cursor-pointer shadow-sm active:scale-95 focus-ring disabled:opacity-50"
-              >
-                🎙 &ldquo;I&apos;m doing great, excited!&rdquo;
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void handleCandidateUtterance('How long will this interview be?')}
-                disabled={processingRef.current}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface-hover text-text-muted border border-border transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1 focus-ring disabled:opacity-50"
-              >
-                <HelpCircle className="w-3 h-3 text-accent" />
-                <span>&ldquo;How long is this round?&rdquo;</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void handleCandidateUtterance('Can I ask questions while coding?')}
-                disabled={processingRef.current}
-                className="px-3.5 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface-hover text-text-muted border border-border transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1 focus-ring disabled:opacity-50"
-              >
-                <HelpCircle className="w-3 h-3 text-accent" />
-                <span>&ldquo;Can I ask questions while coding?&rdquo;</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void handleCandidateUtterance("No questions, I'm ready to begin!")}
-                disabled={processingRef.current}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-accent hover:bg-accent-hover text-accent-foreground shadow-sm transition-all cursor-pointer active:scale-95 flex items-center gap-1.5 focus-ring disabled:opacity-50"
-              >
-                <span>🎙 &ldquo;No questions, ready to begin!&rdquo;</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
           {greetingPhase === 'ready_to_code' && (
-            <button
-              type="button"
-              onClick={onProceedToCoding}
-              disabled={isProblemLoading || Boolean(problemLoadError) || !problemTitle}
-              className="px-6 py-2.5 rounded-full font-bold text-slate-950 text-xs sm:text-sm bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:brightness-105 shadow-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span>
-                {isProblemLoading || !problemTitle
-                  ? 'Waiting for your fresh question'
-                  : problemLoadError
-                  ? 'Question unavailable'
-                  : 'Entering workspace'}
-              </span>
-              {isProblemLoading && <Sparkles className="w-3.5 h-3.5 animate-pulse" />}
-            </button>
+            <p className="text-xs font-semibold text-text-muted" role="status">
+              {isProblemLoading || !problemTitle
+                ? 'Your interviewer is preparing the coding workspace...'
+                : 'Entering the coding workspace...'}
+            </p>
           )}
         </div>
       </div>
