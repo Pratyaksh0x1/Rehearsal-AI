@@ -10,12 +10,10 @@
 
 Rehearsal AI is an interview-practice platform for technical coding, behavioral HR, and resume reviews, with a CS concept explainer. It uses Gnani for speech-to-text and text-to-speech so interview voice interactions can use its speech services and configured voices.
 
-## Demo
 
-- [Demo video link: add before submitting]
-- [Screenshot 1: add before submitting]
-- [Screenshot 2: add before submitting]
-- [Screenshot 3: add before submitting]
+Demo
+
+🎥 Watch the Rehearsal AI Demo on YouTube
 
 ## How we use Gnani AI
 
